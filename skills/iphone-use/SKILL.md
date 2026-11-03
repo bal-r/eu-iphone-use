@@ -30,3 +30,7 @@ CLI observation images are removed at process exit. If an image file is required
 ## Fewer agent round trips
 
 Use `pua_batch` for known, bounded steps. Set its top-level `observe` to `tree` or `both` for one final page observation; leave intermediate actions at `observe=none`. Compact results are the default; use `compact=false` only for diagnostics. Stop at unknown navigation, authentication and uncertain actions. If actions completed but `observation_error` or `observation_pending` is returned, read fresh state without repeating those actions.
+
+## Private takeover
+
+Pause phone access with `pua_screen(action="pause")` before authentication or private user takeover. The pause blocks reads and actions across local conversations, suppresses stale queued work and clears preview pixels. The user handles authentication privately. Resume only after their explicit completion, or their own Resume button click, then read fresh state. Refresh reconnects the preview and cannot clear a pause. An interrupted action remains uncertain and must not be replayed automatically.
