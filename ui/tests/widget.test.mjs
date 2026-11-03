@@ -1124,3 +1124,13 @@ test('takeover clears pixels immediately and resumes only on an explicit button 
   assert.equal(h.elements['tool-pause'].textContent,'Pause');
   assert.deepEqual(h.calls.filter(c=>c.name==='pua_screen').map(c=>c.arguments.action),['pause','resume']);
 });
+
+
+test('switching devices clears old pixels while an ordinary reconnect can retain them',async()=>{
+  const h=await harness();
+  h.app.ontoolresult({structuredContent:preview({stream_id:'a',frame:frame(4)})});
+  h.elements.image.onload();
+  h.app.ontoolresult({structuredContent:preview({stream_id:'b',discard_previous_frame:true,frame_available:false})});
+  assert.equal(h.elements.image.src,undefined);
+  assert.equal(h.elements.app.dataset.frameSeq,'0');
+});
