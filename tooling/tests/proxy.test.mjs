@@ -99,3 +99,50 @@ test('the Python transport completes authenticated reads and writes through the 
     assert.deepEqual(JSON.parse(output).map(item => item.value.method), ['GET', 'POST']);
   } finally { await close(proxy); await close(device); }
 });
+
+
+test('reuses one USB connection for authenticated reads and writes', async () => {
+  let opened=0;
+  const seen=[];
+  const device=http.createServer((req,res) => {
+    req.resume();req.on('end',()=>{seen.push(req.method);res.end('{"value":true}');});
+  });
+  const devicePort=await listen(device);
+  const proxy=createProxy({token,connect:async()=>{
+    opened++;
+    const socket=net.connect(devicePort,'127.0.0.1');
+    await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',reject);});
+    return socket;
+  }});
+  const port=await listen(proxy);
+  try {
+    for(const method of ['GET','POST','GET']) assert.equal((await request(port,{Authorization:`Bearer ${token}`},method)).status,200);
+    assert.equal(opened,1);
+    assert.deepEqual(seen,['GET','POST','GET']);
+    assert.equal((await request(port)).status,403);
+    assert.equal(opened,1);
+  } finally {await close(proxy);await close(device);}
+});
+
+test('an interrupted mutation is not replayed and the next request can reconnect',async()=>{
+  let writes=0,opened=0;
+  const device=http.createServer((req,res)=>{
+    req.resume();req.on('end',()=>{
+      if(req.method==='POST'){writes++;req.socket.destroy();}
+      else res.end('{"value":true}');
+    });
+  });
+  const devicePort=await listen(device);
+  const proxy=createProxy({token,connect:async()=>{
+    opened++;const socket=net.connect(devicePort,'127.0.0.1');
+    await new Promise((resolve,reject)=>{socket.once('connect',resolve);socket.once('error',reject);});return socket;
+  }});
+  const port=await listen(proxy);
+  try {
+    assert.equal((await request(port,{Authorization:`Bearer ${token}`},'POST','{}')).status,502);
+    assert.equal(writes,1);
+    assert.equal((await request(port,{Authorization:`Bearer ${token}`})).status,200);
+    assert.equal(opened,2);
+    assert.equal(writes,1);
+  } finally {await close(proxy);await close(device);}
+});
