@@ -134,6 +134,7 @@ class ScreenHub:
         self._seq = 0
         self._received_at = None
         self._stream_id = uuid.uuid4().hex
+        self._discard_previous_frame = False
         self._state_cache = None
         # Marketing name of the phone for the header; never its own name or identifiers.
         self.device = None
@@ -254,7 +255,7 @@ class ScreenHub:
             else:
                 wire_frame = None
             return {"server_time": self._now(), "frame": wire_frame,
-                    "stream_id": self._stream_id, "device": self.device, "access_epoch": state["access_epoch"],
+                    "stream_id": self._stream_id, "discard_previous_frame": self._discard_previous_frame, "device": self.device, "access_epoch": state["access_epoch"],
                     "frame_available": self._frame is not None and self._frame.get("_epoch") == state["access_epoch"] and not state["paused"],
                     "frame_age_ms": max(0, int((time.monotonic()-self._received_at)*1000)) if self._received_at is not None else None,
                     "viewport": state["viewport"],
@@ -305,13 +306,15 @@ class ScreenHub:
     def paused(self):
         return self._paused()
 
-    def restart(self):
-        """Drop the stream and its last frame; the next visible poll reconnects as a new stream."""
-        self.close()
+    def restart(self, discard_previous_frame=False):
+        """Reconnect while preventing another device's old pixels from being retained."""
         with self._lock:
-            self._stream_id = uuid.uuid4().hex
-            self._seq = 0
-        return self._wire(self._read_state(), include_frame=False)
+            discard=discard_previous_frame or (self._discard_previous_frame and self._seq==0)
+            self.close()
+            self._stream_id=uuid.uuid4().hex
+            self._discard_previous_frame=discard
+            self._seq=0
+        return self._wire(self._read_state(),include_frame=False)
 
     def pause_status(self):
         state = self._read_state()

@@ -20,7 +20,7 @@ import threading
 import time
 from wda_client import WDAClient, WDAError
 from wda_controller import CALL_BUDGET, DEFAULT_MAX_NODES, PhoneController, TYPING_FREQUENCY
-from wda_setup import SetupManager, state_directory
+from wda_setup import SetupManager, state_directory, _write_json
 from wda_apps import AppCatalog
 from wda_screen import ScreenHub
 from wda_access import AccessGate
@@ -304,6 +304,10 @@ class Runtime:
         self.responses=collections.deque(maxlen=500)
         self._replied_at=None
         self._device_lookup=None
+        self._device_lock=threading.Lock()
+        self._device_udid=None
+        self._device_retry_at=0
+        self._device_retry_delay=5
 
     def call(self,name,args,received_epoch=None):
         self.access.local.token=None
@@ -383,29 +387,49 @@ class Runtime:
             if task_temp.exists():task_temp.unlink()
 
     def identify_device(self):
-        """Find the phone's model name for the preview header once, away from the request path."""
-        if self._device_lookup is not None:return
+        """Resolve model metadata asynchronously, with target generations and retries."""
+        def configured_udid():
+            config=self.setup_manager.config
+            return config.get("udid") if isinstance(config,dict) else None
         def lookup():
-            udid=self.setup_manager.config.get("udid")
-            # Nothing is configured yet: there is no phone to name, and nothing to look up.
-            if not isinstance(udid,str) or not udid:return
             cache=self.state_dir/"device.json"
+            model=None;cached=False
             try:
                 known=json.loads(cache.read_text())
                 if known.get("udid")==udid and isinstance(known.get("model"),str):
-                    self.screen.device={"model":known["model"][:60]};return
+                    model=known["model"].strip()
+                    cached=bool(model and model.lower() not in ("iphone","ipad"))
             except (OSError,ValueError,AttributeError):pass
-            try:
-                model=next((d.get("model") for d in self.setup_manager.discover().get("devices",[]) if udid and d.get("udid")==udid),None)
-                if isinstance(model,str) and model:
-                    self.screen.device={"model":model[:60]}
-                    fd=os.open(cache,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
-                    with os.fdopen(fd,"w") as stream:json.dump({"udid":udid,"model":model},stream)
-            except Exception:
-                # The header falls back to a generic name; the preview must never fail over a label.
-                pass
-        self._device_lookup=threading.Thread(target=lookup,name="wda-device-model",daemon=True)
-        self._device_lookup.start()
+            if not cached:
+                try:model=next((d.get("model") for d in self.setup_manager.discover().get("devices",[]) if d.get("udid")==udid),None)
+                except Exception:model=None
+            with self._device_lock:
+                if self._device_lookup is not threading.current_thread() or configured_udid()!=udid:return
+                if isinstance(model,str) and model.strip():
+                    self.screen.device={"model":model.strip()[:60]}
+                    self._device_retry_at=float("inf")
+                    if not cached:
+                        try:_write_json(cache,{"udid":udid,"model":model.strip()})
+                        except OSError:pass
+                else:
+                    self._device_retry_at=time.monotonic()+self._device_retry_delay
+                    self._device_retry_delay=min(60,self._device_retry_delay*2)
+        with self._device_lock:
+            udid=configured_udid()
+            restarted=False
+            if udid!=self._device_udid:
+                previous=self._device_udid
+                self._device_udid=udid
+                self._device_lookup=None
+                self._device_retry_at=0;self._device_retry_delay=5
+                self.screen.device={"model":"iPhone"}
+                if previous is not None:
+                    self.screen.restart(discard_previous_frame=True)
+                    restarted=True
+            if not udid or (self._device_lookup and self._device_lookup.is_alive()) or time.monotonic()<self._device_retry_at:return restarted
+            self._device_lookup=threading.Thread(target=lookup,name="wda-device-model",daemon=True)
+            self._device_lookup.start()
+            return restarted
 
     def screen_gesture(self,args):
         """App-only pointer input and geometry recovery, under the shared operation lock and session."""

@@ -17,6 +17,7 @@ type Preview = {
   server_time: number;
   access_epoch?: number;
   stream_id?: string;
+  discard_previous_frame?: boolean;
   frame: Frame | null;
   frame_available?: boolean;
   frame_age_ms?: number | null;
@@ -389,6 +390,7 @@ function consume(value: unknown) {
   if (typeof preview.stream_id === 'string' && preview.stream_id !== streamId) {
     streamId = preview.stream_id;
     captureFps = undefined;
+    if (preview.discard_previous_frame) { frameGeneration++; clearFrame(); decodedAt = freshUntil = -Infinity; }
     // A replacement stream may belong to another phone; wait for its model.
     nextAppearance = 'plain';
     model.textContent = 'iPhone';

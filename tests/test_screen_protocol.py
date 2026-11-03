@@ -575,7 +575,7 @@ class ScreenProtocolTests(unittest.TestCase):
         runtime, client, screen = self.runtime()
         with patch.object(runtime.setup_manager, "discover") as discover:
             runtime.call("pua_screen_frame", {})
-            runtime._device_lookup.join(timeout=5)
+            self.assertIsNone(runtime._device_lookup)
         discover.assert_not_called()
         self.assertIsNone(screen.device)
 
