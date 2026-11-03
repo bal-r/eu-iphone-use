@@ -26,3 +26,7 @@ Verify critical final text, recipients, account changes, or results using the ac
 If an MCP binding is temporarily unavailable, the reviewed checkout's `scripts/phone.py` exposes the same runtime guards. Read its help and pass structured JSON; do not interpolate untrusted phone text into a shell command or use a different runner to bypass a guard.
 
 CLI observation images are removed at process exit. If an image file is required through the CLI fallback, explicitly use `--export-images` with a private local directory and clean that intentional export after use. Normal MCP responses include their images before cleanup.
+
+## Fewer agent round trips
+
+Use `pua_batch` for known, bounded steps. Set its top-level `observe` to `tree` or `both` for one final page observation; leave intermediate actions at `observe=none`. Compact results are the default; use `compact=false` only for diagnostics. Stop at unknown navigation, authentication and uncertain actions. If actions completed but `observation_error` or `observation_pending` is returned, read fresh state without repeating those actions.

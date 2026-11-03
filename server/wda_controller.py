@@ -952,7 +952,41 @@ class PhoneController:
             result.update({key:value for key,value in error.details.items() if key in ("observation","observation_error","recovery")})
         return result
 
-    def batch(self,steps):
+    def batch(self,steps,observe="none",compact=True):
+        """Known actions in one round trip, optionally followed by one final observation.
+
+        Explicit per-step observations and all recovery evidence are retained. Full
+        detail preserves the original result shape for diagnostic callers.
+        """
+        if observe not in ("none","tree","screenshot","both") or not isinstance(compact,bool):
+            fail("invalid_argument","Invalid batch observation or detail mode.",action_executed=False)
+        started=time.monotonic()
+        result=self._batch(steps)
+        if result["complete"] and observe!="none":
+            last=result["results"][-1]
+            existing=last.get("observation") or (last if "observation_id" in last else None)
+            if existing and (observe=="tree" and "nodes" in existing or observe=="screenshot" and "image" in existing or observe=="both" and "nodes" in existing and "image" in existing):
+                result["observation"]=existing
+            elif time.monotonic()-started>=self.call_budget:
+                result["observation_pending"]=True
+                result["next_step"]="Actions completed. Observe fresh state; do not repeat completed steps."
+            else:
+                try:result["observation"]=self.observe(observe)
+                except WDAError as error:
+                    result["observation_error"]=error.as_dict()
+                    result["next_step"]="Actions completed; final observation failed. Read fresh state without replaying steps."
+        if compact:
+            omitted={"target","postcondition","text","value","elements","candidates"}
+            result["results"]=[{k:v for k,v in item.items() if k not in omitted} for item in result["results"]]
+            if result.get("observation") and result["results"]:
+                last=result["results"][-1]
+                if last.get("observation") is result["observation"]:
+                    del last["observation"]
+                elif last is result["observation"] or last.get("observation_id")==result["observation"].get("observation_id"):
+                    result["results"][-1]={"observed":True}
+        return result
+
+    def _batch(self,steps):
         if not isinstance(steps,list) or not 1<=len(steps)<=20:
             fail("invalid_argument","steps must contain 1..20 operations.")
         allowed={"tap":self.tap,"swipe":self.swipe,"type_text":self.type_text,"launch_app":self.launch_app,"press_button":self.press_button,"wait":self.wait,"observe":self.observe,"scroll_find":self.scroll_find}
