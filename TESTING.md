@@ -25,7 +25,22 @@ These results establish a candidate ready for controlled physical-device accepta
 
 ## Physical-device acceptance
 
-Not yet completed on the user's iPhone.
+First device acceptance session completed on 3 November 2026 with an iPhone 16 Pro Max running iOS 27.0.1, using Xcode 26.2 and the user's own development team. No signing-team ID, device UDID, certificate, profile, or captured phone image is stored in this repository.
+
+Verified during that session:
+
+- The selected phone was connected over USB, paired, and had Developer Mode enabled.
+- The hardened runner built with development signing, installed, and started successfully.
+- `pua_ready` returned `ready=true` with a usable session, an unlocked phone, readable UI source, and a valid viewport.
+- Calculator was found from the installed-device inventory and launched with foreground verification.
+- Seven known keypad actions produced `12 × 34 = 408`; both the accessibility result and a fresh screenshot confirmed it.
+- TCP connections to the phone's Wi-Fi address on ports 8100 and 9100 were refused.
+- An unauthenticated request to the Mac's local proxy returned HTTP 403.
+- The installed MCP entrypoint exposed 20 tools and its preview resource. The chat used the reviewed CLI fallback because newly installed MCP bindings were not loaded into the existing chat.
+
+The temporary Calculator exports were removed after inspection. The USB service was intentionally left running at the user's request to start the connection. Native chat-preview rendering, a manual phone-lock/authentication handoff, and an explicit stop/restart acceptance cycle remain untested on this physical phone. Hinge editing has not yet been tested.
+
+The full acceptance checklist remains below; the items above are the checks with actual device evidence.
 
 1. Pair the user's phone through Xcode and enable Developer Mode in Apple's UI.
 2. Configure the user's explicit device, Apple team, and unique bundle identifier. Build, sign, install, and start the exact hardened runner.
