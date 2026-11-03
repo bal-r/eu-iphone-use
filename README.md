@@ -83,3 +83,7 @@ sh scripts/check.sh
 The UI build is committed as a self-contained HTML resource and must match the source. Runtime USB dependencies use `npm ci --ignore-scripts` and the committed lockfile. Code changes and dependency updates require a new review; do not silently track upstream `main` on a phone installation.
 
 See [TESTING.md](TESTING.md) for validation evidence and the remaining physical-device checks. Successful unit tests or an unsigned Xcode build do not establish that a particular phone has passed acceptance testing.
+
+## Preview quality
+
+The preview's Auto / Eco / Fast button controls both viewer pacing and the phone's JPEG capture rate. Auto uses 2 FPS while idle and requests 8 FPS around activity; Eco stays at 2 FPS and Fast requests 8 FPS. These are requested limits, not guaranteed delivered frame rates. Changes wait until the phone command channel is available and do not replay gestures. Frame age is shown beside the connection state. Hidden panels stop renewing capture as before.

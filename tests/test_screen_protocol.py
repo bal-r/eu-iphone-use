@@ -135,7 +135,7 @@ class ScreenProtocolTests(unittest.TestCase):
         self.assertEqual(tools["pua_screen"]["_meta"]["openai/ui"]["entrypoints"], [{"type": "thread"}])
         for name in ("pua_screen_frame", "pua_screen_action"):
             self.assertEqual(tools[name]["_meta"]["ui"]["visibility"], ["app"])
-        self.assertEqual(tools["pua_screen_action"]["inputSchema"]["properties"]["action"]["enum"], ["refresh", "home", "screenshot", "tap", "drag", "viewport"])
+        self.assertEqual(tools["pua_screen_action"]["inputSchema"]["properties"]["action"]["enum"], ["refresh", "home", "screenshot", "tap", "drag", "viewport", "quality"])
         self.assertTrue(tools["pua_screen_action"]["annotations"]["destructiveHint"])
         self.assertFalse(tools["pua_screen_action"]["annotations"]["idempotentHint"])
         visible = [item for item in tools.values()
@@ -578,6 +578,16 @@ class ScreenProtocolTests(unittest.TestCase):
             runtime._device_lookup.join(timeout=5)
         discover.assert_not_called()
         self.assertIsNone(screen.device)
+
+    def test_quality_changes_capture_settings_without_gesture_or_tree(self):
+        runtime,client,screen=self.runtime()
+        runtime.call("pua_screen_action",{"action":"quality","fps":2})
+        self.assertIn(("POST","/appium/settings",{"settings":{"mjpegServerFramerate":2,"mjpegServerScreenshotQuality":25}}),client.calls)
+        self.assertFalse(any(p.startswith("/source") or p=="/actions" for _,p,_ in client.calls))
+        screen.set_paused(True)
+        before=len(client.calls)
+        with self.assertRaises(WDAError):runtime.call("pua_screen_action",{"action":"quality","fps":8})
+        self.assertEqual(len(client.calls),before)
 
     def test_runtime_close_releases_preview_and_transport(self):
         runtime, client, screen = self.runtime()
