@@ -22,12 +22,13 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
   const timers = new Map();
   const listeners = new Map();
   const calls = [];
+  const qualityCalls = [];
   const lifecycle = [];
   const requestOptions = [];
   let layoutReads = 0;
   let imageWrites = 0;
   const ids = ['app', 'device', 'screen', 'image', 'empty-state', 'empty-state-text', 'cursor', 'stage', 'model', 'live-text', 'toast',
-    'tool-refresh', 'tool-home', 'tool-screenshot'];
+    'tool-refresh', 'tool-home', 'tool-screenshot', 'tool-quality', 'frame-age'];
   const elements = Object.fromEntries(ids.map(id => [id, {
     style: { setProperty(name, value) { this[name] = value; } }, dataset: {},
     hidden: ['device', 'screen', 'cursor', 'toast'].includes(id), clientWidth: 400, clientHeight: 800,
@@ -65,6 +66,7 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     getHostContext() { return context; }
     async requestDisplayMode(params) { lifecycle.push(params.mode); return { mode: params.mode }; }
     callServerTool(params, options) {
+      if (params.arguments?.action === 'quality') { qualityCalls.push(params); return Promise.resolve({structuredContent:{ok:true}}); }
       calls.push(params);
       requestOptions.push(options);
       return reply ? reply(params) : Promise.resolve({ structuredContent: preview() });
@@ -87,7 +89,7 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     clearTimeout: id => timers.delete(id),
   });
   return {
-    app: instance, calls, lifecycle, elements, document, timers, resize,
+    app: instance, calls, qualityCalls, lifecycle, elements, document, timers, resize,
     requestOptions, stageSize,
     advance(ms) { now += ms; },
     get layoutReads() { return layoutReads; },
@@ -111,7 +113,7 @@ test('connects before requesting only fullscreen, then polls only the app frame 
   assert.equal(h.calls.length, 1);
   assert.equal(h.calls[0].name, 'pua_screen_frame');
   assert.equal(JSON.stringify(h.calls[0].arguments), '{"after_seq":0,"last_event_id":0}');
-  assert.equal([...h.timers.values()][0].delay, 250);
+  assert.equal([...h.timers.values()][0].delay, 500);
   assert.equal(h.requestOptions[0].timeout, 3000);
 });
 
@@ -309,7 +311,7 @@ test('reduced motion shows a stationary cursor and old gestures are not replayed
   assert.equal(h.elements.cursor.animation, undefined);
   h.app.ontoolresult({ structuredContent: preview({ server_time: 10000, events: [{ id: 2, kind: 'tap', at: 1000, point: { x: 200, y: 400 } }] }) });
   assert.equal(h.elements.cursor.style.left, '90%');
-  for (let i = 0; i < 5; i++) await h.tick();
+  for (let i = 0; i < 2; i++) await h.tick();
   assert.equal(h.elements.cursor.hidden, false);
   for (let i = 0; i < 4; i++) await h.tick();
   assert.equal(h.elements.cursor.hidden, true);
@@ -1022,9 +1024,23 @@ test('viewport recovery failures are throttled while frame polling continues', a
     : { structuredContent: preview({ frame_available: true,
         frame: { ...frame(), width: 1800, height: 900 }, viewport: { width: 400, height: 800 } }) }) });
   await h.tick();
-  for (let i = 0; i < 7; i++) await h.tick();
+  for (let i = 0; i < 3; i++) await h.tick();
   assert.equal(h.calls.filter(c => c.arguments.action === 'viewport').length, 1);
-  assert.equal(h.calls.filter(c => c.name === 'pua_screen_frame').length, 8);
+  assert.equal(h.calls.filter(c => c.name === 'pua_screen_frame').length, 4);
   await h.tick();
   assert.equal(h.calls.filter(c => c.arguments.action === 'viewport').length, 2);
+});
+
+
+test('quality presets coordinate viewer pacing with phone capture and show frame age', async () => {
+  const h=await harness({reply:async()=>({structuredContent:preview({frame:frame(),frame_age_ms:27,viewport:{width:400,height:800}})})});
+  await h.tick();await flush();
+  assert.equal(h.elements['frame-age'].textContent,'27 ms');
+  assert.equal(h.qualityCalls.at(-1).arguments.fps,2);
+  h.elements['tool-quality'].click();await h.tick();await flush();
+  assert.equal(h.elements['tool-quality'].textContent,'Eco');
+  h.elements['tool-quality'].click();await h.tick();await flush();
+  assert.equal(h.elements['tool-quality'].textContent,'Fast');
+  assert.equal(h.qualityCalls.at(-1).arguments.fps,8);
+  assert.equal(Math.min(...[...h.timers.values()].map(t=>t.delay)),125);
 });

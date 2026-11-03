@@ -76,7 +76,35 @@ let suspended = false;
 let lastGoodFrame: { source: string; size: Size } | undefined;
 let acting = false;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-const FRAME_INTERVAL = 250;
+type PreviewMode = 'auto' | 'economy' | 'interactive';
+let previewMode: PreviewMode = 'auto';
+let activeUntil = -Infinity;
+let captureFps: number | undefined;
+let settingCapture = false;
+const qualityButton = document.getElementById('tool-quality')! as HTMLButtonElement;
+const ageLabel = document.getElementById('frame-age')!;
+function frameInterval() {
+  return previewMode === 'interactive' || (previewMode === 'auto' && (acting || root.dataset.busy === 'true' || performance.now() < activeUntil)) ? 125 : 500;
+}
+async function syncCaptureRate(fps: number) {
+  if (!visible() || root.dataset.live !== 'live' || root.dataset.inputBusy === 'true' || settingCapture || captureFps === fps) return;
+  settingCapture = true;
+  try {
+    const result = await app.callServerTool({name:'pua_screen_action',arguments:{action:'quality',fps}}, {timeout:ACTION_TIMEOUT});
+    if (!result.isError) captureFps = fps;
+  } catch { /* Retry the idempotent setting on a later poll; never retry a gesture. */ }
+  finally { settingCapture = false; }
+}
+function changeQuality() {
+  const modes: PreviewMode[] = ['auto','economy','interactive'];
+  previewMode = modes[(modes.indexOf(previewMode)+1)%modes.length];
+  qualityButton.textContent = {auto:'Auto',economy:'Eco',interactive:'Fast'}[previewMode];
+  qualityButton.title = `Preview: ${previewMode}. Click to change.`;
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  schedule(0);
+}
+qualityButton.addEventListener('click',changeQuality);
 const REQUEST_TIMEOUT = 3000;
 // A screenshot or Home may queue behind the phone operation already running.
 const ACTION_TIMEOUT = 12000;
@@ -334,6 +362,7 @@ function consume(value: unknown) {
   if (typeof preview.service_ready === 'boolean') serviceUnavailable = !preview.service_ready;
   if (typeof preview.stream_id === 'string' && preview.stream_id !== streamId) {
     streamId = preview.stream_id;
+    captureFps = undefined;
     // A replacement stream may belong to another phone; wait for its model.
     nextAppearance = 'plain';
     model.textContent = 'iPhone';
@@ -444,7 +473,7 @@ async function poll() {
   if (!visible() || inFlight) return;
   inFlight = true;
   const started = performance.now();
-  let nextDelay = FRAME_INTERVAL;
+  let nextDelay = frameInterval();
   try {
     if (!ready) await connect();
     if (!visible()) return;
@@ -459,8 +488,13 @@ async function poll() {
     await recoverViewport();
     failures = 0;
     const preview = result.structuredContent as Partial<Preview> | undefined;
+    if (preview?.busy) activeUntil = performance.now() + 2000;
+    const interval = frameInterval();
+    if (typeof preview?.frame_age_ms === 'number') ageLabel.textContent = preview.frame_age_ms > 2000 ? 'Frame stale' : `${Math.round(preview.frame_age_ms)} ms`;
+    else ageLabel.textContent = '';
+    if (!preview?.paused) void syncCaptureRate(interval === 125 ? 8 : 2);
     nextDelay = preview?.paused || preview?.frame_available === false
-      ? 1000 : Math.max(0, FRAME_INTERVAL - (performance.now() - started));
+      ? 1000 : Math.max(0, interval - (performance.now() - started));
   } catch {
     failures += 1;
     nextDelay = Math.min(2000, 500 * failures);
@@ -584,6 +618,7 @@ function pointerUp(event: PointerEvent) {
     ...(start.moved ? { to_x: end.x, to_y: end.y, duration: Math.max(.05, Math.min(1, (performance.now() - start.at) / 1000)) } : {}) });
 }
 async function sendPointer(args: Record<string, string | number>) {
+  activeUntil = performance.now() + 2000;
   acting = true;
   syncTools();
   try {
@@ -709,6 +744,7 @@ function dispose() {
   toastTimer = undefined;
   toast.hidden = true;
   cancelPointer();
+  qualityButton.removeEventListener('click',changeQuality);
   screen.removeEventListener('wheel', wheel);
   for (const [name, handler] of Object.entries(pointerHandlers)) screen.removeEventListener(name, handler as EventListener);
   for (const [name, handler] of toolHandlers) tools[name].removeEventListener('click', handler);
