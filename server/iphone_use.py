@@ -394,7 +394,7 @@ class Runtime:
         # Cache only while the live frame agrees with the pointer's geometry.
         # A missing/stale stream or a rotation forces a native geometry read.
         geometry=getattr(self.screen,"fresh_geometry",lambda:None)()
-        agrees=geometry and abs(geometry["width"]/geometry["height"]-args["width"]/args["height"])<.01
+        agrees=isinstance(geometry,dict) and abs(geometry["width"]/geometry["height"]-args["width"]/args["height"])<.01
         viewport=self.phone.viewport(10 if agrees else 0)
         if any(args[key]!=viewport[key] for key in ("width","height")):
             viewport=self.phone.viewport()
