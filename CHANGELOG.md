@@ -1,5 +1,14 @@
 # Changes
 
+## 0.6.0 — Codex integration
+
+- Stable version-aware MCP registration, concise initial instructions and visible server version.
+- Cancellation of queued/remaining steps, uncertain in-flight writes and content-free progress.
+- Shared phone ownership, idle/crash release and optional reviewed Stop/Interrupt hooks.
+- User-selected target context from the preview without phone input.
+- Typed result outcomes, bounded optional selector taps and persistent CLI sessions.
+
+
 ## 0.5.0 — usability candidate
 
 - Compact known-step batches can return a final observation without another agent call.

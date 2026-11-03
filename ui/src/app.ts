@@ -15,6 +15,9 @@ type Gesture = {
 };
 type Preview = {
   server_time: number;
+  server_version?: string;
+  operation_progress?: {completed:number;total:number} | null;
+  coordination?: {held_by_this_chat?:boolean;holder?:{label?:string}|null};
   access_epoch?: number;
   stream_id?: string;
   discard_previous_frame?: boolean;
@@ -53,7 +56,7 @@ const tools: Record<ToolName, HTMLButtonElement> = {
   screenshot: document.getElementById('tool-screenshot') as HTMLButtonElement,
 };
 const app = new App(
-  { name: 'iPhone Use Screen', version: '0.5.0' },
+  { name: 'iPhone Use Screen', version: '0.6.0' },
   { availableDisplayModes: ['fullscreen'] },
   { autoResize: false },
 );
@@ -86,6 +89,30 @@ let captureFps: number | undefined;
 let settingCapture = false;
 const qualityButton = document.getElementById('tool-quality')! as HTMLButtonElement;
 const ageLabel = document.getElementById('frame-age')!;
+const progressLabel = document.getElementById('operation-progress')!;
+const versionLabel = document.getElementById('server-version')!;
+const pointButton = document.getElementById('tool-point')! as HTMLButtonElement;
+let selectingTarget = false;
+function togglePoint() {
+  selectingTarget = !selectingTarget;
+  pointButton.textContent = selectingTarget ? 'Choose' : 'Point';
+  pointButton.title = selectingTarget ? 'Click a visible control to share its context with the agent' : 'Select a target without sending a phone tap';
+}
+pointButton.addEventListener('click',togglePoint);
+async function shareSelection(point:Point,size:Size) {
+  if (typeof app.updateModelContext !== 'function') { notify('This host cannot share target context; describe the target in chat',true);return; }
+  acting = true;syncTools();
+  const generation = frameGeneration;
+  try {
+    const result = await app.callServerTool({name:'pua_screen_action',arguments:{action:'select',x:point.x,y:point.y,width:size.width,height:size.height}}, {timeout:ACTION_TIMEOUT});
+    if (result.isError || generation !== frameGeneration) { notify('Selection unavailable; inspect the current screen',true);return; }
+    const data = result.structuredContent as {selection?:unknown};
+    await app.updateModelContext({content:[{type:'text',text:JSON.stringify({iphone_selection:data.selection,instruction:'User selected this target. Observe fresh state before acting on their next instruction.'})}]});
+    notify('Target shared. Tell the agent what to do.');
+    selectingTarget = false;pointButton.textContent = 'Point';
+  } catch { notify('Could not share context; describe the target in chat',true); }
+  finally {acting = false;syncTools();}
+}
 const pauseButton = document.getElementById('tool-pause')! as HTMLButtonElement;
 let changingAccess = false;
 async function toggleAccess() {
@@ -380,6 +407,11 @@ function consume(value: unknown) {
   const preview = value as Partial<Preview>;
   if (changingAccess && preview.paused !== true && root.dataset.live === 'paused') return;
   pauseButton.textContent = preview.paused ? 'Resume' : 'Pause';
+  if (typeof preview.server_version === 'string') versionLabel.textContent = `v${preview.server_version}`;
+  const progress = preview.operation_progress;
+  progressLabel.textContent = progress && Number.isInteger(progress.completed) && Number.isInteger(progress.total) && progress.completed >= 0 && progress.completed <= progress.total && progress.total <= 20 ? `${progress.completed}/${progress.total}` : '';
+  const other = preview.coordination?.holder && !preview.coordination.held_by_this_chat;
+  if (other) notify(`Phone in use: ${preview.coordination?.holder?.label ?? 'another conversation'}`);
   if (Number.isSafeInteger(preview.access_epoch)) {
     if (preview.access_epoch! < accessEpoch) return;
     if (preview.access_epoch! > accessEpoch && accessEpoch >= 0) clearFrame();
@@ -471,7 +503,7 @@ function consume(value: unknown) {
     screen.hidden = false;
   }
   if (typeof preview.busy === 'boolean') root.dataset.busy = String(preview.busy);
-  root.dataset.inputBusy = String(preview.input_busy ?? preview.busy);
+  root.dataset.inputBusy = String(!!other || (preview.input_busy ?? preview.busy));
   // Keep the edge light on between tools and while the model plans its next action.
   if (preview.busy === true) root.dataset.operating = 'true';
   if (Array.isArray(preview.events)) {
@@ -637,6 +669,10 @@ function pointerUp(event: PointerEvent) {
   cancelPointer();
   if (!end || !canPoint() || start.generation !== frameGeneration || start.stream !== streamId
       || start.size.width !== viewport?.width || start.size.height !== viewport?.height) return;
+  if (selectingTarget) {
+    if (!start.moved) void shareSelection(end,start.size);
+    return;
+  }
   // Long presses and looped drags are deliberately not converted into surprise taps.
   if (!start.moved && performance.now() - start.at > 700) return;
   if (start.moved && Math.hypot(end.x - start.point.x, end.y - start.point.y) < 3) return;
@@ -773,6 +809,7 @@ function dispose() {
   cancelPointer();
   qualityButton.removeEventListener('click',changeQuality);
   pauseButton.removeEventListener('click',toggleAccess);
+  pointButton.removeEventListener('click',togglePoint);
   screen.removeEventListener('wheel', wheel);
   for (const [name, handler] of Object.entries(pointerHandlers)) screen.removeEventListener(name, handler as EventListener);
   for (const [name, handler] of toolHandlers) tools[name].removeEventListener('click', handler);

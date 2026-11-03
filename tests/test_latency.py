@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT / "server"))
 from iphone_use import Runtime, result_content, serve, tool_result
 from wda_client import WDAError
 from wda_access import AccessGate
+from operation_control import OperationControl
 from wda_screen import ScreenHub
 from wda_controller import PhoneController, compact_node
 import wda_image
@@ -876,6 +877,7 @@ class ServeTests(unittest.TestCase):
         class SlowRuntime:
             def __init__(self):
                 self.access = access
+                self.control = OperationControl()
 
             def call(self, name, arguments, received_epoch=None):
                 self.access.begin(name, arguments, received_epoch)
@@ -917,6 +919,7 @@ class ServeTests(unittest.TestCase):
         class OrderedRuntime:
             def __init__(self):
                 self.access = access
+                self.control = OperationControl()
 
             def call(self, name, arguments, received_epoch=None):
                 self.access.begin(name, arguments, received_epoch)

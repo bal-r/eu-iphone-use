@@ -24,12 +24,14 @@ from wda_setup import SetupManager, state_directory, _write_json
 from wda_apps import AppCatalog
 from wda_screen import ScreenHub
 from wda_access import AccessGate
+from operation_control import OperationControl
+from device_lease import DeviceLease, device_key
 import wda_image
 from local_auth import connection_token
 
 PUAError=WDAError
-VERSION="0.5.0"
-SCREEN_URI="ui://iphone-use/phone-0.5.0.html"
+VERSION="0.6.0"
+SCREEN_URI="ui://iphone-use/phone-0.6.0.html"
 # Codex scopes reuse to the host, chat, server and UI resource. A stable result
 # ID keeps repeated READY/open/pause/resume calls in that chat on one panel,
 # including after the MCP process reconnects; no device identifiers are needed.
@@ -69,8 +71,9 @@ SEL["description"]="Exact label/name/value/type/enabled fields or label_contains
 SEL["examples"]=[{"label":"返回","type":"Button"}]
 SEL["minProperties"]=1
 OBS=string("Post-action output, default none. Use tree/both when the next decision needs the resulting page; screenshot returns an image. This is next-step context, not proof of this action; expect/verify control verification.",enum=["none","tree","screenshot","both"])
-OBS["default"]="none"
+
 EXPECT={"expect":SEL,"observe":OBS}
+OBS["default"]="none"
 VERIFY={"type":"boolean","default":False,"description":"Opt in to this operation's result check. Default false executes once and defers checking to the next required observation or final key checkpoint. Never blindly replay an uncertain mutation."}
 REGION=obj({k:num(0 if k in ("x","y") else 1,10000) for k in ("x","y","width","height")},("x","y","width","height"))
 REGION["description"]="Scroll rectangle in iPhone points, not screenshot pixels. observation_id is optional. Omit region for the central area, or use the actual list bounds. With verify=true, the region must fit current viewport and native modal bounds."
@@ -79,7 +82,7 @@ SCHEMAS={
      "snapshot_max_depth":{**num(1,100,"integer"),"description":"Native depth cap. Incomplete, not visible-only; tree/both only."},
      "snapshot_max_children":{**num(1,500,"integer"),"description":"Native per-parent child cap. May omit visible rows; tree/both only."}}),
  "find":obj({"selector":SEL,"limit":num(1,30,"integer")},("selector",)),
- "tap":obj({"selector":SEL,"x":num(0,10000),"y":num(0,10000),"observation_id":string("Optional ID from this Runtime. Checks app/viewport context, not whole-page pixel equality or age."),**EXPECT}),
+ "tap":obj({"optional":BOOL,"selector":SEL,"x":num(0,10000),"y":num(0,10000),"observation_id":string("Optional ID from this Runtime. Checks app/viewport context, not whole-page pixel equality or age."),**EXPECT}),
  "swipe":obj({"direction":string("Finger movement; up usually reveals later rows. Default up.",enum=["up","down","left","right"]),"region":REGION,"observation_id":string("Optional ID from this Runtime; checks app/viewport context, not numeric/carousel text changes or age."),"expect":SEL,"verify":{**VERIFY,"description":"False: one gesture, no XML checks. True: check anchor movement once; failure returns a screenshot before another action. Numeric refresh is not progress."},"max_attempts":{**num(1,2,"integer"),"default":1,"description":"Legacy limit; even 2 stops after the first unproven gesture for screenshot inspection."},"observe":OBS}),
  "type_text":obj({"selector":SEL,"text":string("Full text to enter. Required with selector unless continue_token is given.",max_length=10000),"allow_newlines":BOOL,"submit":BOOL,"replace":BOOL,"verify":{**VERIFY,"description":"Default false enters the full intended text once without value readback. True checks exact value and stops before submit on mismatch. Secure fields require user takeover."},**EXPECT,"continue_token":string("Token from a result with input_complete=false. Pass it alone to type the rest of that text with its original options.",max_length=64)}),
  "press_button":obj({"name":string(enum=["home","volumeup","volumedown"]),"verify":VERIFY,**EXPECT},("name",)),
@@ -90,6 +93,7 @@ SCHEMAS={
  "collect_list":obj({"row_type":string(),"max_pages":num(1,10,"integer"),"end_selector":SEL}),
  "apps":obj({"query":string(max_length=100),"country":string(max_length=2),"source":string(enum=["auto","catalog","installed"]),"limit":num(1,30,"integer")},("query",)),
  "doctor":obj({}),"ready":obj({"screenshot":{"type":"boolean","default":True,"description":"Also verify screenshot; false retains status/session/source/viewport/unlock checks."},"recover":{"type":"boolean","default":True,"description":"Normal task startup: omit or set true, so a persistent local.pid/XCTest fault can queue one bounded restart of a proven owned PUA. Use false only for an explicitly requested diagnostic/no-restart check, not a routine precheck. False is respected and returns ready=false, state=recovery_required when restart is needed; queued recovery returns state=recovering. Neither state proves readiness."}}),"metrics":obj({"reset":{"type":"boolean","default":False,"description":"Return the totals, then start a new measurement window."}}),
+ "device":obj({"action":string(enum=["status","claim","release"]),"label":string(max_length=60),"quiet":BOOL},("action",)),
  "setup":obj({"action":string(enum=["discover","fetch","configure","build","start","stop","status"]),"udid":string(),"team_id":string(),"bundle_id":string(),"source_dir":string(max_length=4096),"local_port":num(1024,65535,"integer"),"device_port":num(1024,65535,"integer"),"job_id":string(),"wait_seconds":{**num(0,30),"description":"Bounded wait for this job: start defaults to 20 seconds, status to 0. Use status with job_id and 20 to await an active start/recovery. Timeout keeps the job running; do not start again."}},("action",))
 }
 # Each batch operation carries the same closed argument schema as its standalone tool.
@@ -99,7 +103,7 @@ SCHEMAS["ready"]["examples"]=[{"recover":True,"screenshot":False}]
 SCHEMAS["screen"]=obj({"action":string("Default open displays the live iPhone sidebar. Pause before password/Face ID takeover; resume only after the user confirms completion.",enum=["open","pause","resume"])})
 SCHEMAS["screen_frame"]=obj({"after_seq":num(0,9007199254740991,"integer"),"last_event_id":num(0,9007199254740991,"integer")})
 SCHEMAS["screen_action"]=obj({
- "action":string("Preview controls: refresh, home, screenshot, refresh viewport geometry, or a user pointer tap/drag in iPhone points.",enum=["refresh","home","screenshot","tap","drag","viewport","quality"]),
+ "action":string("Preview controls: refresh, home, screenshot, refresh viewport geometry, or a user pointer tap/drag in iPhone points.",enum=["refresh","home","screenshot","tap","drag","viewport","quality","select"]),
  "x":num(0,10000),"y":num(0,10000),"to_x":num(0,10000),"to_y":num(0,10000),
  "width":num(1,10000),"height":num(1,10000),"duration":num(.05,1),"fps":{"type":"integer","enum":[2,8]}
 },("action",))
@@ -111,7 +115,7 @@ DESCRIPTIONS={
  "ready":"First use: setup(status), reuse/start and wait, then READY (recover=true); only ready=true permits phone tasks. Reuse the healthy channel. pua_timeout: bounded host wait then READY again, not immediate setup/restart. pua_unreachable/not_ready: setup, not task failure. recover=true handles owned runtime faults, not cold startup. Follow recovering/recovery_required guidance. Never replay phone actions.",
  "observe":"Fresh phone tree/screenshot, point viewport and contextual observation_id. Nodes are not proven hittable. Native snapshot limits are opt-in and incomplete, not visible-only. Image pixels x image.pixel_to_point = iPhone points.",
  "find":"Query selector fields or a PUA predicate directly without a whole tree. Returns matches in tree order with index, type, texts and rect; this tool's selector documents the fields every selector accepts.",
- "tap":"Tap the element a selector resolves to after on-screen and hittable checks, or tap point coordinates with optional contextual observation_id. If the selector fails, the error returns a screenshot and tap points: tap by x/y in the next call instead of trying other selectors. Executes once optimistically; expect opts into a postcondition. Request tree/both if the next decision needs the new page.",
+ "tap":"Tap the element a selector resolves to after on-screen and hittable checks; optional=true skips only an absent known selector, or tap point coordinates with optional contextual observation_id. If the selector fails, the error returns a screenshot and tap points: tap by x/y in the next call instead of trying other selectors. Executes once optimistically; expect opts into a postcondition. Request tree/both if the next decision needs the new page.",
  "swipe":"One gesture; default verify=false/observe=none skips XML checks. verify=true checks geometry once; failure returns a screenshot even with none/tree, without another gesture. Inspect it before acting; no progress does not prove list completeness.",
  "type_text":"Enter the full intended Unicode text once into an editable nonsecure field; no test fragments. Omit selector for the focused field, including after a coordinate tap. Long input returns input_complete=false: pass only continue_token until complete; verify/submit/expect/observe run afterward. verify=true checks exact readback before submit; expect checks the page. Newlines require explicit intent; submit defaults false. Never replay uncertain input/submission.",
  "press_button":"Home uses the dedicated PUA homescreen endpoint once; default skips foreground polling. verify=true checks SpringBoard for Home, expect can check a page. Volume effects cannot be semantically verified.",
@@ -123,8 +127,9 @@ DESCRIPTIONS={
  "collect_list":"Collect/deduplicate accessibility rows over bounded pages. Returns evidence and explicit coverage limits; always requires reconciliation before declaring business completeness.",
  "metrics":"In-process totals without text, app data or images: PUA HTTP time and bytes, tool time, response bytes per tool, and the wait between each response and the next tool request (host, model and user time). reset=true starts a new window."
 }
+DESCRIPTIONS["device"]="See or release this conversation's shared phone lease. Claim may set a short task label. quiet=true returns {} for lifecycle hooks. Never touches the phone."
 DESCRIPTIONS["apps"]="Resolve an app identifier locally using the connected device or bundled offline reference. There is no online search. Query before launch; check installed_verified."
-READS={"doctor","observe","find","wait","metrics","apps"}
+READS={"device","doctor","observe","find","wait","metrics","apps"}
 READS.update(("screen","screen_frame"))
 DESCRIPTIONS["screen"]="Open or reuse the live iPhone screen in the Codex side panel. No phone actions or UI controls. Pause the preview before password/Face ID user takeover; resume after explicit completion. READY also opens or reuses this view by default."
 DESCRIPTIONS["screen_frame"]="App-only cached live preview and action cursor events. Never reads XML, starts sessions or occupies the phone operation lock."
@@ -188,6 +193,7 @@ for tool in TOOLS:
         tool["annotations"].update(readOnlyHint=False,destructiveHint=False,idempotentHint=True)
     if tool["name"][len("pua_"):] in APP_TOOLS:tool["_meta"]={"ui":{"visibility":["app"]}}
     if tool["name"]=="pua_screen_action":tool["annotations"].update(readOnlyHint=False,destructiveHint=True,idempotentHint=False)
+    if tool["name"]=="pua_device":tool["annotations"].update(readOnlyHint=False,destructiveHint=False,idempotentHint=True,openWorldHint=False)
     if tool["name"]=="pua_screenshot":tool["annotations"]["destructiveHint"]=False
 
 
@@ -229,11 +235,12 @@ def validate_semantics(name,args):
         if k in args:predicate(args[k])
     if name=="screen_action":
         required={"action"}
-        if args["action"] in ("tap","drag"):required.update(("x","y","width","height"))
+        if args["action"] in ("tap","drag","select"):required.update(("x","y","width","height"))
         if args["action"]=="drag":required.update(("to_x","to_y","duration"))
         if args["action"]=="quality":required.add("fps")
         if set(args)!=required:raise WDAError("invalid_argument","Provide exactly the fields required for this screen action.",details={"action_executed":False})
     if name=="tap":
+        if args.get("optional") and "selector" not in args:raise WDAError("invalid_argument","Optional taps require a selector.")
         semantic="selector" in args
         coords=all(k in args for k in ("x","y"))
         if semantic==coords or (semantic and any(k in args for k in ("x","y"))):
@@ -297,6 +304,9 @@ class Runtime:
         self.client.access=self.access
         self.phone.access_check=self.access.check
         self._context_epoch=None
+        self.control=OperationControl()
+        self.access.control=self.control
+        self.lease=None;self._lease_key=None
         self.phone.settle_seconds=setting("WDA_SETTLE_SECONDS",SETTLE_SECONDS,0,2)
         self.phone.call_budget=setting("WDA_CALL_BUDGET_SECONDS",CALL_BUDGET,5,240)
         self.phone.typing_frequency=int(setting("WDA_TYPING_FREQUENCY",TYPING_FREQUENCY,5,120))
@@ -309,17 +319,36 @@ class Runtime:
         self._device_retry_at=0
         self._device_retry_delay=5
 
+    def check_access(self):
+        self.control.check();self.access.check()
+
+    def current_lease(self):
+        key=device_key(self.state_dir)
+        if key!=self._lease_key:
+            if self.lease:self.lease.close()
+            self.lease=DeviceLease(key) if key else None
+            self._lease_key=key
+        return self.lease
+
     def call(self,name,args,received_epoch=None):
         self.access.local.token=None
+        self.control.check()
         if not isinstance(name,str) or not name.startswith("pua_") or name[4:] not in SCHEMAS:
             raise WDAError("unknown_tool","Unknown PUA tool.")
         validate(args,SCHEMAS[name[4:]]);validate_semantics(name[4:],args)
         token=self.access.begin(name,args,received_epoch)
         if not token["safe"] and self._context_epoch!=token["epoch"]:
             self.phone.reset();self._context_epoch=token["epoch"]
-        self.phone.access_check=self.access.check
+        self.phone.access_check=self.check_access
+        self.phone.progress_callback=self.control.progress
         try:
-            data=self._dispatch(name,args)
+            lease=self.current_lease()
+            unleased=name in ("pua_device","pua_screen","pua_screen_frame","pua_metrics","pua_apps","pua_doctor") or (name=="pua_setup" and args.get("action") in ("status","discover")) or (name=="pua_screen_action" and args.get("action") in ("refresh","viewport","quality"))
+            mutation=name in ("pua_tap","pua_swipe","pua_type_text","pua_press_button","pua_screenshot","pua_batch","pua_collect_list","pua_scroll_find")
+            with lease.hold(mutation=mutation) if lease and not unleased else contextlib.nullcontext():
+                data=self._dispatch(name,args)
+                if lease and (name in ("pua_observe","pua_find") or name=="pua_ready" and data.get("ready") or name=="pua_screen_action" and args.get("action")=="select"):lease.observed()
+            self.control.check()
             self.access.check()
             return data
         except WDAError as exc:
@@ -335,9 +364,20 @@ class Runtime:
         if not isinstance(name,str) or not name.startswith("pua_") or name[4:] not in SCHEMAS:raise WDAError("unknown_tool","Unknown PUA tool.")
         validate(args,SCHEMAS[name[4:]]);validate_semantics(name[4:],args)
         if name in ("pua_screen","pua_screen_frame","pua_screen_action"):self.identify_device()
+        if name=="pua_device":
+            lease=self.current_lease()
+            if not lease:result={"configured":False,"holder":None}
+            elif args["action"]=="claim":result=lease.claim(args.get("label"))
+            elif args["action"]=="release":result={"released":lease.release(),**lease.status()}
+            else:result=lease.status()
+            return {} if args.get("quiet") else result
         # Cached preview polling does not share the PUA action/session lock.
-        if name=="pua_screen_frame":return self.screen.frame(**args)
-        if name=="pua_screen_action" and args["action"] not in ("tap","drag","viewport","quality"):return self.screen_action(args["action"])
+        if name=="pua_screen_frame":
+            state=self.screen.frame(**args)
+            lease=self.current_lease()
+            state.update(server_version=VERSION,coordination=lease.status() if lease else {"holder":None})
+            return state
+        if name=="pua_screen_action" and args["action"] not in ("tap","drag","viewport","quality","select"):return self.screen_action(args["action"])
         if name=="pua_screen":
             action=args.get("action","open")
             if action=="pause":self.screen.set_paused(True)
@@ -438,6 +478,20 @@ class Runtime:
         if self.client.request("GET","/wda/locked").get("value") is not False:
             self.screen.set_paused(True,reason="device_locked")
             raise WDAError("phone_locked","Unlock the iPhone before using the preview.",details={"action_executed":False})
+        if args["action"]=="select":
+            observed=self.phone.observe("tree")
+            viewport=observed["viewport"]
+            if any(args[key]!=viewport[key] for key in ("width","height")):
+                raise WDAError("stale_viewport","Phone geometry changed; select again from a fresh frame.",details={"action_executed":False})
+            point={"x":args["x"],"y":args["y"]}
+            if point["x"]>=viewport["width"] or point["y"]>=viewport["height"]:raise WDAError("invalid_argument","Selection is outside the screen.")
+            matches=[n for n in observed["nodes"] if n.get("rect") and n["rect"][0]<=point["x"]<n["rect"][0]+n["rect"][2] and n["rect"][1]<=point["y"]<n["rect"][1]+n["rect"][3]]
+            target=min(matches,key=lambda n:n["rect"][2]*n["rect"][3]) if matches else {}
+            if target.get("type")=="SecureTextField":
+                self.screen.set_paused(True)
+                raise WDAError("not_editable","Handle secure fields privately on the phone.",details={"secure_field":True,"action_executed":False})
+            selection={"point":point,"app":observed["app"],"viewport":viewport,"observation_id":observed["observation_id"],"observed_at":observed["observed_at"],"label":str(target.get("label",target.get("name","")))[:120]}
+            return {"ok":True,"selection":selection,"action_executed":False}
         if args["action"]=="quality":
             self.client.session("POST","/appium/settings",{"settings":{"mjpegServerFramerate":args["fps"],"mjpegServerScreenshotQuality":25}})
             return {"ok":True,"capture_fps":args["fps"]}
@@ -612,6 +666,11 @@ class Runtime:
                     candidate_url="http://127.0.0.1:"+str(args["local_port"])
                     manager=SetupManager(self.state_dir,candidate_url)
                 result=manager.setup(**args)
+                if args["action"]=="status":
+                    marker=Path(os.environ.get("BALTA_IPHONE_INSTALL_MARKER",str(Path.home()/".local/share/balta-tech-iphone-use/integration/plugin-current.json")))
+                    try:installed=json.loads(marker.read_text())
+                    except (OSError,ValueError):installed={}
+                    result["integration"]={"server_version":VERSION,"installed_version":installed.get("version"),"launcher_version":os.environ.get("BALTA_IPHONE_LAUNCHER_VERSION"),"restart_required":bool(installed and (installed.get("version")!=VERSION or installed.get("server_sha256")!=__import__("hashlib").sha256(Path(__file__).read_bytes()).hexdigest()))}
                 if result.get("ok") and args["action"] in ("stop","configure","start"):
                     self.client.close();self.client.session_id=None;self.phone.reset()
                 if result.get("ok") and args["action"]=="configure" and "local_port" in args:
@@ -681,7 +740,9 @@ class Runtime:
 
     def close(self):
         try:self.screen.close();self.client.close()
-        finally:self.phone.cleanup_captures()
+        finally:
+            self.phone.cleanup_captures()
+            if self.lease:self.lease.close()
 
 
 def result_content(data,structured=False):
@@ -690,6 +751,12 @@ def result_content(data,structured=False):
     structuredContent is left out on purpose: a host that receives it may give the model
     only that object and drop every content block, including the image.
     """
+    data=dict(data)
+    error=data.get("error") or {}
+    code=error.get("code",data.get("stop_reason"))
+    uncertain=error.get("uncertain") is True
+    outcome=("uncertain" if uncertain else "cancelled" if code=="cancelled" else "blocked" if code in ("access_paused","phone_locked","device_held","fresh_observation_required") else "failed" if error or data.get("ok") is False else "incomplete" if data.get("complete") is False or data.get("ready") is False else "skipped" if data.get("skipped") else "completed")
+    data.update(outcome=outcome,ok=outcome in ("completed","skipped"),action_state="uncertain" if uncertain else "not_sent" if data.get("action_executed",error.get("action_executed")) is False else "completed" if data.get("action_executed") is True else "not_applicable")
     content=[{"type":"text","text":json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(",",":"))}]
     image=data.get("image") or data.get("observation",{}).get("image")
     if not image and isinstance(data.get("error"),dict):image=data["error"].get("observation",{}).get("image")
@@ -701,38 +768,34 @@ def result_content(data,structured=False):
     return result
 
 
+RESULT_SCHEMA={"type":"object","properties":{"outcome":{"type":"string","enum":["completed","skipped","incomplete","blocked","uncertain","cancelled","failed"]},"ok":{"type":"boolean"},"action_state":{"type":"string","enum":["completed","not_sent","uncertain","not_applicable"]}},"required":["outcome","ok","action_state"],"additionalProperties":True}
+for _tool in TOOLS:
+    if _tool["name"] in ("pua_setup","pua_doctor","pua_metrics","pua_apps"):_tool["outputSchema"]=RESULT_SCHEMA
+
+
 def tool_result(runtime,params,received_epoch=None):
     name=params.get("name")
     try:
         data=runtime.call(name,params.get("arguments",{}),received_epoch=received_epoch)
         # The preview App reads structuredContent; frames never become model text.
         if name=="pua_screen_frame":return {"content":[],"structuredContent":data,"isError":False}
-        result=result_content(data,structured=name in ("pua_screen","pua_screen_action"))
+        if name=="pua_device" and params.get("arguments",{}).get("quiet"):
+            return {"content":[{"type":"text","text":"{}"}],"isError":False}
+        result=result_content(data,structured=name in ("pua_screen","pua_screen_action","pua_device","pua_setup","pua_doctor","pua_metrics","pua_apps"))
         if name in ("pua_ready","pua_screen"):
             result["_meta"]={"openai/widgetSessionId":SCREEN_SESSION_ID}
         return result
-    except WDAError as exc:return result_content({"error":exc.as_dict()},structured=name=="pua_screen_action")
+    except WDAError as exc:return result_content({"error":exc.as_dict()},structured=name in ("pua_screen_action","pua_setup","pua_doctor","pua_metrics","pua_apps"))
     except Exception as exc:
         print("iphone-use tool failure: "+type(exc).__name__,file=sys.stderr)
         return result_content({"error":{"code":"internal_error","message":"Local tool failed; inspect setup status or local stderr.","uncertain":True}})
 
 
 INSTRUCTIONS=(
- "PUA means Phone Use Agent; all iPhone Use tools use the pua_ prefix. "
- "Read iphone-use-setup before setup and iphone-use for tasks. Use only this hardened Balta Tech build; never reuse an unverified external phone service.  First phone use in this chat: pua_setup(action=status) before any READY; reuse a ready service or active job, or start once with the existing build only if the service is confirmed stopped. start waits up to 20 seconds; pending jobs use status(job_id, wait_seconds=20), then pua_ready(recover=true, screenshot=false); only ready=true permits phone tasks, then reuse READY's observation and the healthy channel. "
- "If READY fails with pua_unreachable/not_ready, inspect pua_setup(action=status) rather than end the task: reuse an active start/recovery job, or start once from the existing config/build only if the service is confirmed stopped and startup is permitted; poll that job until service.ready=true, then READY again. Connection failure or service.ready=false alone does not prove the service is stopped. Missing config/source/build uses the setup skill. "
- "pua_timeout is not proof of disconnection: wait on the host for recovery.retry_after_seconds, then take one fresh screenshot observation, or retry READY when READY failed. Do not use pua_wait as a transport wait or immediately repeat the slow query. Bound delayed attempts by recovery.max_wait_retries; persistent timeouts use setup(status) diagnostically, not blind restart. action_uncertain retains transport_error to distinguish timeout from connection failure; never replay an uncertain action. pua_transport_error is unclassified, not proof of disconnect. "
- "recover=true is runtime recovery, not cold startup; for state=recovering follow its setup job until the service is ready, then READY again. Honor explicit diagnostic/no-start/no-restart instructions. "
- "The live iPhone screen opens or reuses the same side panel with READY; setup/recovery and preview pause/resume keep the existing panel. Use pua_screen to reopen a closed panel, not to refresh an already open one. Opening it does not prove readiness or require an extra user confirmation, and widget frames never substitute for a model observation or final verification. "
- "Results are one compact JSON text. Tree nodes give type without the XCUIElementType prefix and rect=[x,y,width,height] in iPhone points; an omitted name equals label, an omitted value repeats the text, omitted enabled/visible/in_viewport are true. A listed node is not proven hittable: fixed headers and overlays can cover it. "
- "A screenshot arrives as an image in the same result; through functions.exec forward each image block with image(block) and text blocks with text(block.text), never text(the whole result) or base64. If image forwarding is unavailable, use view_image on image.path or error.observation.image.path. It is scaled for reading: image pixels x image.pixel_to_point [x,y] = iPhone points. Standalone observation uses mode, mutation output uses observe. "
- "Selectors copy label/name/value/type from fresh nodes; use label_contains for long or changing labels. Matches nested at one place, or with only one on screen, resolve by themselves. "
- "Screenshot inspection is the fallback for abnormal UI state: selector/focus failure, unresolved scroll search, no scroll progress, changed/blocked scroll context, input mismatch or a failed page expectation. Inspect the attached screenshot FIRST before any further mutation; if no usable image is attached take one pua_observe(mode=screenshot). Decide from visible state whether to stop, handle a popup, change the region/direction, tap by x/y or continue missing work. scroll_find never chains another swipe after an unresolved post-scroll query. tap_point/candidates locate elements but do not prove they are unobstructed; close a visible popup before tapping a covered background target. For input tap the visible editable field, then type_text with text and no selector. If a coordinate tap or focus failed, choose a new target from a fresh screenshot rather than repeat the same point or hand routine UI trouble to the user. Do not try other selector spellings or read the tree again first. Correct schema/channel/authentication errors by their own recovery; never blindly replay uncertain actions. Resolve unknown bundle IDs with pua_apps. "
- "Execute routine actions optimistically: observe=none and verify=false are defaults, verified=false/verification_deferred=true is normal and does not require a separate verification call. If the next decision needs the resulting page, request observe=tree/both in the action and inspect previous success while planning that next step. "
- "Chain known steps in batch; do not batch speculative repeated swipes toward an unknown target. Inspect the next page first, using a screenshot when tree truncation hides the boundary. explicit expect/verify opts into checking key outcomes. Send long text whole: when type_text returns input_complete=false, call it again with only continue_token; a batch stopped by input_continues or time_budget continues from stopped_at. "
- "Verify final critical results before reporting completion. Retry or replan only after observing a definite failure; never replay uncertain input/submission or an already executed multi-step operation wholesale. No_scroll_progress from explicit verification does not prove empty/complete data. "
- "For App passwords or Face ID call pua_screen(action=pause); phone_locked already auto-pauses the preview for device unlock, so do not overwrite that reason with an extra pause. Pause phone calls and use the available host question tool (request_user_input_async in Default), first option exactly Done, continue. Wait for the actual user answer; async return or preselection is not confirmation. After the actual user completion answer, explicitly pua_screen(action=resume) for App authentication or legacy/unknown pause, then read fresh state. For device unlock run READY once; successful READY clears only its matching device_locked pause. READY/open never clear App authentication or unknown pause. Continue remaining work from that fresh state. "
- "Operation action_complete/verified fields do not mean the user's entire task is complete. Track all deliverables, give commentary progress and continue tools while work remains; final only after completion or a concrete blocker. For an unavailable MCP binding use the skill's direct Runtime fallback with the same operation lock."
+ "Operate only the user's requested iPhone task. First use: setup(status), reuse the managed service, then ready(screenshot=false). Reuse fresh observations; batch known steps with observe=tree. Pause access for private authentication and resume only after user completion. Never replay uncertain actions. Use device(release) to yield ownership, not setup(stop) between turns. Read iphone-use for operation and iphone-use-setup for setup/recovery. "
+ "Images are returned in content blocks: forward them with image(block), not text(base64). Coordinates are iPhone points; use image.pixel_to_point to map image pixels. Observe unfamiliar pages before acting. A visible tree node is not proof of hittability. "
+ "Batch optional selector taps may skip an absent known popup; other failures stop. complete means the requested tool steps completed, not the entire user task. Check outcome and any final observation before reporting success. For cancellation, completed steps are never replayed; an in-flight write may remain uncertain. "
+ "A timeout is not proof the service stopped. Inspect setup status, reuse active jobs and retry only bounded reads after the recovery delay. Do not reinstall, restart or change signing to work around uncertainty. The user handles passwords, biometrics and trust prompts privately. Detailed workflows are in the two plugin skills."
 )
 
 
@@ -753,12 +816,24 @@ def serve(runtime):
                 response={"jsonrpc":"2.0","id":response["id"],"result":result_content({"error":exc.as_dict()},structured="structuredContent" in response.get("result",{}))}
                 print(json.dumps(response,ensure_ascii=False,allow_nan=False),flush=True)
     jobs=queue.Queue()
+    controls={};controls_lock=threading.Lock()
+    def execute(ident,params,received_epoch,event):
+        progress_token=params.get("_meta",{}).get("progressToken") if isinstance(params.get("_meta",{}),dict) else None
+        def progress(done,total):
+            runtime.screen.set_progress(done,total)
+            if isinstance(progress_token,(str,int,float)) and not isinstance(progress_token,bool):
+                send({"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":progress_token,"progress":done,"total":total,"message":f"{done}/{total} steps"}})
+        with runtime.control.operation(event,progress):
+            return tool_result(runtime,params,received_epoch)
     def work():
         while True:
             job=jobs.get()
             if job is None:return
-            ident,params,arrived,received_epoch=job
-            result=tool_result(runtime,params,received_epoch)
+            ident,params,arrived,received_epoch,event=job
+            result=execute(ident,params,received_epoch,event)
+            with controls_lock:controls.pop(ident,None)
+            if event.is_set() and not result.get("isError"):
+                result=result_content({"error":{"code":"cancelled","message":"Request cancelled; inspect fresh state without replaying completed actions.","uncertain":True,"replay_action":False}})
             runtime.note_response(params.get("name"),result,arrived)
             send({"jsonrpc":"2.0","id":ident,"result":result},runtime.access.token())
             runtime.replied()
@@ -768,11 +843,13 @@ def serve(runtime):
     # queueing input against a screen that may have changed in the meantime.
     screen_gate=threading.Lock()
     screen_worker=None
-    def screen_work(ident,params,received_epoch):
+    def screen_work(ident,params,received_epoch,event):
         try:
-            result=tool_result(runtime,params,received_epoch)
+            result=execute(ident,params,received_epoch,event)
             send({"jsonrpc":"2.0","id":ident,"result":result},runtime.access.token())
-        finally:screen_gate.release()
+        finally:
+            with controls_lock:controls.pop(ident,None)
+            screen_gate.release()
     try:
         for line in sys.stdin:
             request=None
@@ -781,7 +858,14 @@ def serve(runtime):
                 if len(line)>1024*1024:raise ValueError("Request exceeds 1 MiB")
                 request=json.loads(line,parse_constant=lambda x:(_ for _ in ()).throw(ValueError(x)))
                 if not isinstance(request,dict) or request.get("jsonrpc")!="2.0" or not isinstance(request.get("method"),str):raise ValueError("Invalid request")
-                if "id" not in request:continue
+                if "id" not in request:
+                    if request.get("method")=="notifications/cancelled" and isinstance(request.get("params"),dict):
+                        target=request["params"].get("requestId")
+                        if isinstance(target,(str,int)) and not isinstance(target,bool):
+                            with controls_lock:
+                                event=controls.get(target)
+                                if event:event.set()
+                    continue
                 ident=request["id"]
                 if isinstance(ident,bool) or not isinstance(ident,(str,int)):raise ValueError("Invalid identifier")
                 params=request.get("params",{})
@@ -800,11 +884,14 @@ def serve(runtime):
                     result={"contents":[{"uri":SCREEN_URI,"mimeType":"text/html;profile=mcp-app","text":html,"_meta":SCREEN_META}]}
                 elif method=="tools/call":
                     arrived=time.monotonic()
-                    if params.get("name") not in ("pua_screen_frame","pua_screen","pua_screen_action"):
-                        jobs.put((ident,params,arrived,runtime.access.capture_epoch()));continue
-                    if params.get("name")=="pua_screen_action" and isinstance(params.get("arguments"),dict) and params["arguments"].get("action") in ("tap","drag","viewport","quality"):
+                    event=threading.Event()
+                    if params.get("name") not in ("pua_screen_frame","pua_screen","pua_screen_action","pua_device"):
+                        with controls_lock:controls[ident]=event
+                        jobs.put((ident,params,arrived,runtime.access.capture_epoch(),event));continue
+                    if params.get("name")=="pua_screen_action" and isinstance(params.get("arguments"),dict) and params["arguments"].get("action") in ("tap","drag","viewport","quality","select"):
                         if screen_gate.acquire(blocking=False):
-                            screen_worker=threading.Thread(target=screen_work,args=(ident,params,runtime.access.capture_epoch()),name="wda-screen-action",daemon=True)
+                            with controls_lock:controls[ident]=event
+                            screen_worker=threading.Thread(target=screen_work,args=(ident,params,runtime.access.capture_epoch(),event),name="wda-screen-action",daemon=True)
                             screen_worker.start();continue
                         result=result_content({"error":{"code":"device_busy","message":"A screen action is already running."}},structured=True)
                         send({"jsonrpc":"2.0","id":ident,"result":result},runtime.access.token());continue
@@ -826,6 +913,7 @@ def serve(runtime):
 
 def main():
     parser=argparse.ArgumentParser()
+    parser.add_argument("--version",action="version",version=VERSION)
     parser.add_argument("--state-dir");parser.add_argument("--url");parser.add_argument("--doctor",action="store_true");parser.add_argument("--ready",action="store_true")
     args=parser.parse_args();runtime=Runtime(args.state_dir,args.url)
     try:

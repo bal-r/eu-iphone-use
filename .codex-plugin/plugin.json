@@ -1,6 +1,6 @@
 {
   "name": "iphone-use",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Private iPhone automation over USB, with no product telemetry and locally restricted device services.",
   "author": {
     "name": "Balta Tech"
@@ -20,5 +20,6 @@
       "Set up my USB-connected iPhone and verify the connection in Calculator.",
       "Use my iPhone for this task and verify the final result."
     ]
-  }
+  },
+  "hooks": "./hooks/hooks.json"
 }

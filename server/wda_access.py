@@ -20,6 +20,7 @@ class AccessGate:
     def __init__(self, screen):
         self.screen = screen
         self.local = threading.local()
+        self.control = None
 
     @contextlib.contextmanager
     def state(self):
@@ -37,7 +38,7 @@ class AccessGate:
             return state["access_epoch"]
 
     def begin(self, name, args, received_epoch=None):
-        safe = name in ("pua_screen", "pua_screen_frame", "pua_metrics") or (
+        safe = name in ("pua_screen", "pua_screen_frame", "pua_metrics", "pua_device") or (
             name == "pua_setup" and args.get("action") in ("status", "stop"))
         with self.state() as state:
             token = {"epoch": state["access_epoch"], "safe": safe, "mutation": False,
@@ -66,6 +67,7 @@ class AccessGate:
             raise paused_error(token["mutation"])
 
     def before_request(self, method, path, readonly):
+        if self.control:self.control.before_request(readonly)
         with self.state() as state:
             self.check(state=state, method=method, path=path)
             token = self.token()
@@ -73,6 +75,7 @@ class AccessGate:
                 token["mutation"] = True
 
     def after_request(self, method, path):
+        if self.control:self.control.after_request()
         self.check(method=method, path=path)
 
     def unlocked(self, pause_id):

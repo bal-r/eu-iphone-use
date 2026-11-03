@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from iphone_use import Runtime, SCREEN_URI, serve
 from wda_client import WDAError
+from operation_control import OperationControl
 from wda_controller import PhoneController
 from wda_access import AccessGate
 from wda_screen import ScreenHub
@@ -125,18 +126,18 @@ class ScreenProtocolTests(unittest.TestCase):
         ])
         self.assertIn("resources", responses[0]["result"]["capabilities"])
         tools = {item["name"]: item for item in responses[1]["result"]["tools"]}
-        self.assertEqual(len(tools), 20)
+        self.assertEqual(len(tools), 21)
         for name in ("pua_ready", "pua_screen"):
             self.assertEqual(tools[name]["_meta"]["ui"]["resourceUri"], SCREEN_URI)
         self.assertEqual(tools["pua_screen"]["_meta"]["openai/ui"]["entrypoints"], [{"type": "thread"}])
         for name in ("pua_screen_frame", "pua_screen_action"):
             self.assertEqual(tools[name]["_meta"]["ui"]["visibility"], ["app"])
-        self.assertEqual(tools["pua_screen_action"]["inputSchema"]["properties"]["action"]["enum"], ["refresh", "home", "screenshot", "tap", "drag", "viewport", "quality"])
+        self.assertEqual(tools["pua_screen_action"]["inputSchema"]["properties"]["action"]["enum"], ["refresh", "home", "screenshot", "tap", "drag", "viewport", "quality", "select"])
         self.assertTrue(tools["pua_screen_action"]["annotations"]["destructiveHint"])
         self.assertFalse(tools["pua_screen_action"]["annotations"]["idempotentHint"])
         visible = [item for item in tools.values()
                    if item.get("_meta", {}).get("ui", {}).get("visibility") != ["app"]]
-        self.assertEqual(len(visible), 18)
+        self.assertEqual(len(visible), 19)
         self.assertTrue(tools["pua_screen_frame"]["annotations"]["readOnlyHint"])
 
     def test_stdio_serves_packaged_widget_without_connecting_to_wda(self):
@@ -513,7 +514,7 @@ class ScreenProtocolTests(unittest.TestCase):
         runtime, client, screen = self.runtime()
         self.toolbar(runtime)
         result = self.call_over_stdio(runtime, "pua_screen_action", {"action": "home"})
-        self.assertEqual(result["structuredContent"], {"ok": True, "action": "home"})
+        self.assertEqual(result["structuredContent"], {"ok": True, "action": "home", "outcome":"completed", "action_state":"not_applicable"})
         screen.is_paused = True
         refused = self.call_over_stdio(runtime, "pua_screen_action", {"action": "home"})
         self.assertTrue(refused["isError"])
@@ -523,6 +524,7 @@ class ScreenProtocolTests(unittest.TestCase):
     def test_slow_screen_action_does_not_block_frames_or_queue_more_input(self):
         started, polled = threading.Event(), threading.Event()
         runtime = Mock()
+        runtime.control = OperationControl()
         hub = ScreenHub(self.directory.name)
         self.addCleanup(hub.close)
         runtime.access = AccessGate(hub)

@@ -211,6 +211,7 @@ class ScreenHub:
             pause_id = None
         return {"paused": paused, "pause_reason": reason, "pause_id": pause_id,
                 "access_epoch": raw.get("access_epoch", 0),
+                "operation_progress": raw.get("operation_progress") if isinstance(raw.get("operation_progress"),dict) else None,
                 "actors": dict(list(actors.items())[-32:]),
                 "events": events, "last_event_id": last_id if isinstance(last_id, int) and last_id >= 0 else 0,
                 "finished_at": finished_at if isinstance(finished_at, int)
@@ -255,6 +256,7 @@ class ScreenHub:
             else:
                 wire_frame = None
             return {"server_time": self._now(), "frame": wire_frame,
+                    "operation_progress": state.get("operation_progress"),
                     "stream_id": self._stream_id, "discard_previous_frame": self._discard_previous_frame, "device": self.device, "access_epoch": state["access_epoch"],
                     "frame_available": self._frame is not None and self._frame.get("_epoch") == state["access_epoch"] and not state["paused"],
                     "frame_age_ms": max(0, int((time.monotonic()-self._received_at)*1000)) if self._received_at is not None else None,
@@ -358,6 +360,7 @@ class ScreenHub:
                              pause_id=uuid.uuid4().hex if paused else None, access_epoch=state["access_epoch"] + 1)
             if paused:
                 state["actors"] = {}
+                state["operation_progress"] = None
                 state["finished_at"] = 0
                 state["events"] = []
         if paused:
@@ -369,6 +372,11 @@ class ScreenHub:
         if cleaned:
             with self._state_transaction() as state:
                 state["viewport"] = cleaned
+
+    def set_progress(self,completed,total):
+        if not isinstance(completed,int) or not isinstance(total,int) or not 0<=completed<=total<=20:return
+        with self._state_transaction() as state:
+            if not state["paused"]:state["operation_progress"]={"completed":completed,"total":total}
 
     def begin(self, op):
         # Operation names, app IDs, text and selectors are deliberately not stored.

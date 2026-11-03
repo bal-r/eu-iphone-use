@@ -23,12 +23,13 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
   const listeners = new Map();
   const calls = [];
   const qualityCalls = [];
+  const contexts = [];
   const lifecycle = [];
   const requestOptions = [];
   let layoutReads = 0;
   let imageWrites = 0;
   const ids = ['app', 'device', 'screen', 'image', 'empty-state', 'empty-state-text', 'cursor', 'stage', 'model', 'live-text', 'toast',
-    'tool-refresh', 'tool-home', 'tool-screenshot', 'tool-quality', 'frame-age', 'tool-pause'];
+    'tool-refresh', 'tool-home', 'tool-screenshot', 'tool-quality', 'frame-age', 'tool-pause', 'tool-point', 'operation-progress', 'server-version'];
   const elements = Object.fromEntries(ids.map(id => [id, {
     style: { setProperty(name, value) { this[name] = value; } }, dataset: {},
     hidden: ['device', 'screen', 'cursor', 'toast'].includes(id), clientWidth: 400, clientHeight: 800,
@@ -63,6 +64,7 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     constructor(info, capabilities, options) { Object.assign(this, { info, capabilities, options }); instance = this; }
     async connect() { lifecycle.push('connect'); if (connectReply) await connectReply(); }
     async close() { this.onclose?.(); }
+    async updateModelContext(value) { contexts.push(value); return {}; }
     getHostContext() { return context; }
     async requestDisplayMode(params) { lifecycle.push(params.mode); return { mode: params.mode }; }
     callServerTool(params, options) {
@@ -89,7 +91,7 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     clearTimeout: id => timers.delete(id),
   });
   return {
-    app: instance, calls, qualityCalls, lifecycle, elements, document, timers, resize,
+    app: instance, calls, qualityCalls, contexts, lifecycle, elements, document, timers, resize,
     requestOptions, stageSize,
     advance(ms) { now += ms; },
     get layoutReads() { return layoutReads; },
@@ -1133,4 +1135,26 @@ test('switching devices clears old pixels while an ordinary reconnect can retain
   h.app.ontoolresult({structuredContent:preview({stream_id:'b',discard_previous_frame:true,frame_available:false})});
   assert.equal(h.elements.image.src,undefined);
   assert.equal(h.elements.app.dataset.frameSeq,'0');
+});
+
+
+test('point mode shares selected context without sending a tap or drag',async()=>{
+  const h=await harness({reply:async params=>({structuredContent:params.arguments.action==='select'
+    ? {selection:{point:{x:200,y:400},observation_id:'fresh-selection',label:'Known field'}} : preview()})});
+  h.app.ontoolresult({structuredContent:preview({frame:frame(),viewport:{width:400,height:800}})});
+  h.elements.image.onload();
+  h.elements['tool-point'].click();
+  h.elements.screen.handlers.get('pointerdown')({isPrimary:true,button:0,pointerId:1,clientX:110,clientY:220,preventDefault(){}});
+  h.elements.screen.handlers.get('pointerup')({isPrimary:true,button:0,pointerId:1,clientX:110,clientY:220,preventDefault(){}});
+  await flush();
+  assert.equal(h.calls.filter(c=>c.arguments.action==='select').length,1);
+  assert.equal(h.calls.filter(c=>['tap','drag'].includes(c.arguments.action)).length,0);
+  assert.match(JSON.stringify(h.contexts),/fresh-selection/);
+});
+
+test('panel displays MCP version and bounded batch progress',async()=>{
+  const h=await harness();
+  h.app.ontoolresult({structuredContent:preview({server_version:'0.6.0',operation_progress:{completed:2,total:5}})});
+  assert.equal(h.elements['server-version'].textContent,'v0.6.0');
+  assert.equal(h.elements['operation-progress'].textContent,'2/5');
 });

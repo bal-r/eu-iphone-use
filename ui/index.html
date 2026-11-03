@@ -10,6 +10,8 @@
   <main id="app" data-frame-seq="0" data-busy="false" data-operating="false" data-live="connecting" aria-label="Live iPhone screen">
     <header id="status">
       <span id="model">iPhone</span>
+      <span id="operation-progress" aria-label="Operation progress"></span>
+      <span id="server-version" aria-label="MCP version"></span>
       <span id="frame-age" aria-label="Frame age"></span>
       <span id="live"><i class="dot" aria-hidden="true"></i><span id="live-text">Connecting</span></span>
     </header>
@@ -47,6 +49,7 @@
     </div>
     <div id="toast" role="status" aria-live="polite" hidden></div>
     <nav id="toolbar" aria-label="Phone controls">
+      <button id="tool-point" type="button" aria-label="Point at a target for the agent" title="Select a target to share with the agent; no phone tap is sent">Point</button>
       <button id="tool-pause" type="button" aria-label="Pause phone access" title="Pause all phone access and take over">Pause</button>
       <button id="tool-quality" type="button" aria-label="Change preview quality" title="Preview: auto. Click to change.">Auto</button>
       <button id="tool-refresh" type="button" aria-label="Refresh connection" title="Reconnect preview">

@@ -8,18 +8,26 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
-from iphone_use import PUAError, Runtime, SCHEMAS
+from iphone_use import PUAError, Runtime, SCHEMAS, serve
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("tool", choices=["pua_" + name for name in SCHEMAS])
+    parser.add_argument("tool", nargs="?", choices=["pua_" + name for name in SCHEMAS])
     parser.add_argument("arguments", nargs="?", default="{}", help="JSON object matching the MCP tool schema")
     parser.add_argument("--export-images", help="Explicitly keep returned observation images in this local directory (otherwise deleted at exit)")
+    parser.add_argument("--session",action="store_true",help="Persistent stdio MCP session; keeps the lease and observations across calls")
     parser.add_argument("--state-dir")
     parser.add_argument("--url")
     args = parser.parse_args()
     runtime = None
+    if args.session:
+        if args.tool or args.export_images:parser.error("--session uses stdin MCP requests without a positional tool or image export")
+        runtime=Runtime(args.state_dir,args.url)
+        try:serve(runtime)
+        finally:runtime.close()
+        return 0
+    if not args.tool:parser.error("Choose a tool, or --session for persistent MCP")
     try:
         arguments = json.loads(args.arguments, parse_constant=lambda value: (_ for _ in ()).throw(ValueError("Non-finite JSON number")))
         runtime = Runtime(args.state_dir, args.url)

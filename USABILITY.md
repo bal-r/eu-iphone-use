@@ -44,3 +44,16 @@ This is for already known steps. Inspect unfamiliar pages before building a batc
 Use a dedicated test session after switching to this candidate. Verify Calculator results, compare whole-task time and tool round-trip counts, try repeated selector/preview taps, rotate the phone, exercise Auto/Eco/Fast, and run a sustained preview/control session. Test pause during a pending read and during an action; private pixels and queued work must not reappear after resume. Verify resume needs fresh state, and stop/restart only the owned job. Test the first-device setup path on an unregistered test device.
 
 No physical speedup or measured delivered frame rate is claimed by these code changes. Regression results are recorded in TESTING.md.
+
+# Codex integration — 0.6.0
+
+The 0.6.0 candidate builds on all 0.5.0 branches. The first 512 instruction characters cover normal control, batching, private takeover and lease release.
+
+- The compatibility registration uses a private stable launcher and an atomically updated, hash-verified install marker. `pua_setup(action="status")` reports connected and installed versions and whether restart is needed. `install.sh --native` uses the plugin-bundled MCP on a verified host and removes only a recognised legacy Balta registration. Normal installation retains compatibility with older CLI builds.
+- MCP cancellation notifications stop queued work and later batch steps. A write already in flight remains uncertain; no action is replayed or undone. Progress notifications and the preview show counts, without field values or app content. Cancel does not kill the phone runner or a separately started setup job.
+- `pua_device` exposes claim/status/release. A kernel lock serialises whole work segments for the same physical phone, including across state directories. Another conversation receives the holder label and can retry after release. It is not a FIFO scheduler. A new holder must observe before context-dependent actions. Leases expire after 60 idle seconds; active calls retain ownership. Process exit releases the lock.
+- Bundled Stop/Interrupt MCP hooks release ownership on hosts supporting and trusting those hooks. They keep the USB service warm. Hook support varies; expiry remains the fallback. SessionEnd MCP hooks are not assumed.
+- Point mode reads fresh state and shares only the chosen target through MCP Apps model context. It sends no phone tap. The model must observe again before acting on a later instruction. Unsupported context sharing produces an explicit fallback message.
+- Model results include `outcome`, `ok` and `action_state`. Non-image diagnostic tools also publish output schemas and structured content; image-bearing results preserve the image content blocks for older hosts.
+- Selector taps accept `optional=true` to skip an absent known control. Ambiguity, occlusion, uncertainty and submission barriers still stop execution. This supports bounded optional-popup handling in an existing batch, not arbitrary hidden branching.
+- `scripts/phone.py --session` exposes a persistent stdio MCP fallback, preserving the lease and observation context across calls. Independent one-shot processes must not bypass a handover's fresh-observation check.

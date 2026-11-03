@@ -15,12 +15,14 @@ class RegistrationTests(unittest.TestCase):
     def test_installs_in_its_own_namespace_without_reading_other_configuration(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary).resolve(); (root/'server').mkdir(); (root/'server/iphone_use.py').write_text('# fixture')
+            (root/'plugin.json').write_text('{"version":"0.6.0"}')
+            (root/'server/mcp_launcher.py').write_bytes((ROOT/'server/mcp_launcher.py').read_bytes())
             installation={'pluginId':'iphone-use@balta-tech-local','installedPath':str(root)}
             with patch.object(registration.sys,'stdin',io.StringIO(json.dumps(installation))), patch.object(registration.subprocess,'run') as run, patch('sys.stdout',io.StringIO()):
-                registration.main()
-            run.assert_called_once_with(['codex','mcp','add','balta_iphone_use','--','python3',str(root/'server/iphone_use.py')],check=True)
+                registration.main(["--launcher-dir",str(root/"integration")])
+            run.assert_called_once_with(['codex','mcp','add','balta_iphone_use','--','python3',str(root/'integration/mcp_launcher.py')],check=True)
 
     def test_rejects_a_different_plugin_before_registering(self):
         with patch.object(registration.sys,'stdin',io.StringIO('{"pluginId":"unrelated"}')), patch.object(registration.subprocess,'run') as run:
-            with self.assertRaises(SystemExit): registration.main()
+            with self.assertRaises(SystemExit): registration.main([])
         run.assert_not_called()

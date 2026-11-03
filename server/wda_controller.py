@@ -200,6 +200,7 @@ class PhoneController:
         self.last_target=None
         self.snapshot_restore=None
         self.access_check=None
+        self.progress_callback=None
         self.typing_frequency=TYPING_FREQUENCY
         self.typing_piece=TYPING_PIECE
         self.call_budget=CALL_BUDGET
@@ -619,6 +620,7 @@ class PhoneController:
         pred=predicate(selector)
         deadline=time.monotonic()+timeout_seconds;attempts=0
         while True:
+            if self.access_check:self.access_check()
             attempts+=1
             remaining=max(0.05,deadline-time.monotonic()) if timeout_seconds else 0.5
             found=self.client.session("POST","/elements",{"using":"predicate string","value":pred},timeout=min(remaining,2)) or []
@@ -643,16 +645,19 @@ class PhoneController:
         return result
 
     @action_result
-    def tap(self,selector=None,x=None,y=None,observation_id=None,expect=None,observe="none"):
+    def tap(self,selector=None,x=None,y=None,observation_id=None,expect=None,observe="none",optional=False):
         if observe not in ("none","tree","screenshot","both"):
             fail("invalid_argument","Invalid observation mode.")
         if expect:predicate(expect)
+        if not isinstance(optional,bool) or optional and selector is None:fail("invalid_argument","Optional taps require an explicit selector.",action_executed=False)
         if selector is not None:
             if x is not None or y is not None:
                 fail("invalid_argument","Choose selector or coordinates.")
             try:
                 try:element=self.resolve(selector)
                 except WDAError as error:
+                    if optional and error.code=="no_such_element" and not error.details.get("matches"):
+                        return {"skipped":True,"action_executed":False,"action_complete":True,"reason":"optional_target_absent"}
                     if error.code!="occluded_target" or not error.details.get("under_bar"):raise
                     rect,height=error.details["target_rect"],error.details["viewport"]["height"]
                     cy=rect["y"]+rect["height"]/2;x=error.details["viewport"]["width"]/2
@@ -1078,6 +1083,7 @@ class PhoneController:
         # One call stays inside the host's tool timeout: later steps are handed back, never dropped silently.
         self._deadline=time.monotonic()+self.call_budget
         try:
+            if self.progress_callback:self.progress_callback(0,len(steps))
             for index,step in enumerate(steps):
                 if self.access_check:self.access_check()
                 if index and time.monotonic()>=self._deadline:
@@ -1089,6 +1095,7 @@ class PhoneController:
                         return {"completed_steps":len(results),"stopped_at":index,"stop_reason":"input_continues","results":results+[result],"complete":False,
                                 "next_step":"Call pua_type_text with the returned continue_token until input_complete, then send the steps after stopped_at."}
                     results.append(result)
+                    if self.progress_callback:self.progress_callback(len(results),len(steps))
                     if result.get("submitted") and not result.get("submission_verified"):
                         return {"completed_steps":len(results),"stopped_at":index,"stop_reason":"submission_requires_verification","results":results,"complete":False}
                 except WDAError as exc:

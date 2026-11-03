@@ -18,7 +18,8 @@ from test_controller import FakeWDA
 
 def payload(result):
     """The model-facing data: one JSON text block, never a second structured copy."""
-    assert "structuredContent" not in result, "structuredContent would hide content blocks from the model"
+    if any(block.get("type")=="image" for block in result["content"]):
+        assert "structuredContent" not in result, "Image-bearing model results preserve their image content blocks"
     assert result["content"][0]["type"] == "text"
     return json.loads(result["content"][0]["text"])
 
@@ -151,7 +152,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(responses[1]["result"], {})
         tools = responses[2]["result"]["tools"]
         names = [tool["name"] for tool in tools]
-        self.assertEqual(len(names), 20)
+        self.assertEqual(len(names), 21)
         self.assertEqual(len(names), len(set(names)))
         for name in ("pua_ready", "pua_setup", "pua_observe", "pua_tap", "pua_type_text", "pua_batch", "pua_collect_list", "pua_apps"):
             self.assertIn(name, names)

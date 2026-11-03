@@ -95,3 +95,9 @@ Failed runner starts now retain a private XCTest result bundle and a bounded, re
 ## Usability candidate
 
 The 0.5.0 integration branch combines faster known-step workflows, USB connection reuse, adaptive preview and selected upstream reliability fixes. [USABILITY.md](USABILITY.md) lists the independent branches, APIs and remaining phone acceptance checks.
+
+## MCP connection and ownership
+
+The 0.6.0 installer registers a stable local launcher, so future plugin updates do not leave the CLI pointing at a removed version cache. Reconnect the MCP after installation. `pua_setup(action="status")` reports the running version and any installed-version mismatch; the preview displays its server version. On a host verified to support plugin-bundled MCP servers, `sh scripts/install.sh --native` uses that mode and removes only a recognised Balta compatibility registration.
+
+Release control with `pua_device(action="release")` between turns. The bundled Stop/Interrupt hooks do this automatically where supported and trusted; they do not stop the USB runner. A lease also expires after 60 idle seconds and is released by process exit. End the actual phone session with `pua_setup(action="stop")`. Use `scripts/phone.py --session` for persistent CLI fallback. See [USABILITY.md](USABILITY.md) for cancellation, Point mode and result contracts.
