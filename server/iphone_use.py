@@ -390,8 +390,14 @@ class Runtime:
         if self.client.request("GET","/wda/locked").get("value") is not False:
             self.screen.set_paused(True,reason="device_locked")
             raise WDAError("phone_locked","Unlock the iPhone before using the preview.",details={"action_executed":False})
-        viewport=self.phone.viewport()
-        if args["action"]=="viewport":return {"viewport":viewport}
+        if args["action"]=="viewport":return {"viewport":self.phone.viewport()}
+        # Cache only while the live frame agrees with the pointer's geometry.
+        # A missing/stale stream or a rotation forces a native geometry read.
+        geometry=getattr(self.screen,"fresh_geometry",lambda:None)()
+        agrees=geometry and abs(geometry["width"]/geometry["height"]-args["width"]/args["height"])<.01
+        viewport=self.phone.viewport(10 if agrees else 0)
+        if any(args[key]!=viewport[key] for key in ("width","height")):
+            viewport=self.phone.viewport()
         if any(args[key]!=viewport[key] for key in ("width","height")):
             raise WDAError("stale_viewport","The phone rotated. Wait for a fresh frame before trying again.",details={"action_executed":False})
         points=[(args["x"],args["y"])]
@@ -399,6 +405,7 @@ class Runtime:
         if any(x>=viewport["width"] or y>=viewport["height"] for x,y in points):
             raise WDAError("invalid_argument","Pointer is outside the phone viewport.",details={"action_executed":False})
         token=self.screen.begin(args["action"])
+        completed=False
         try:
             if args["action"]=="tap":
                 # Synthesize a short touch directly; XCTest's convenience tap
@@ -411,12 +418,13 @@ class Runtime:
                         {"type":"pause","duration":50},
                         {"type":"pointerUp","button":0}]}]})
             else:self.phone.post("/wda/dragfromtoforduration",{"fromX":args["x"],"fromY":args["y"],"toX":args["to_x"],"toY":args["to_y"],"duration":args["duration"]})
+            completed=True
             return {"ok":True,"action":args["action"],"action_executed":True}
         except WDAError as error:
             error.details.update({"uncertain":True,"action_complete":False,"verification_required":"Inspect the phone before another gesture; do not replay automatically."})
             raise
         finally:
-            self.phone.external_action()
+            self.phone.external_action(preserve_geometry=completed)
             self.screen.end(token)
 
     def screen_action(self,action):

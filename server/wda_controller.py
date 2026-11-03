@@ -169,10 +169,10 @@ class PhoneController:
         # Bounded host-side transition delay; never enable XCTest's idle wait.
         self.settle_seconds=0
 
-    def external_action(self):
+    def external_action(self,preserve_geometry=False):
         """The user acted on the phone from the preview toolbar: earlier focus and geometry may be gone."""
         self.accepted_actions+=1
-        self._viewport_cache=None
+        if not preserve_geometry:self._viewport_cache=None
         self.pending_input=None
 
     def reset(self):
