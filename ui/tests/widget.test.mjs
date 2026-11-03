@@ -22,12 +22,14 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
   const timers = new Map();
   const listeners = new Map();
   const calls = [];
+  const qualityCalls = [];
+  const contexts = [];
   const lifecycle = [];
   const requestOptions = [];
   let layoutReads = 0;
   let imageWrites = 0;
   const ids = ['app', 'device', 'screen', 'image', 'empty-state', 'empty-state-text', 'cursor', 'stage', 'model', 'live-text', 'toast',
-    'tool-refresh', 'tool-home', 'tool-screenshot'];
+    'tool-refresh', 'tool-home', 'tool-screenshot', 'tool-quality', 'frame-age', 'tool-pause', 'tool-point', 'operation-progress', 'server-version'];
   const elements = Object.fromEntries(ids.map(id => [id, {
     style: { setProperty(name, value) { this[name] = value; } }, dataset: {},
     hidden: ['device', 'screen', 'cursor', 'toast'].includes(id), clientWidth: 400, clientHeight: 800,
@@ -62,9 +64,11 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     constructor(info, capabilities, options) { Object.assign(this, { info, capabilities, options }); instance = this; }
     async connect() { lifecycle.push('connect'); if (connectReply) await connectReply(); }
     async close() { this.onclose?.(); }
+    async updateModelContext(value) { contexts.push(value); return {}; }
     getHostContext() { return context; }
     async requestDisplayMode(params) { lifecycle.push(params.mode); return { mode: params.mode }; }
     callServerTool(params, options) {
+      if (params.arguments?.action === 'quality') { qualityCalls.push(params); return Promise.resolve({structuredContent:{ok:true}}); }
       calls.push(params);
       requestOptions.push(options);
       return reply ? reply(params) : Promise.resolve({ structuredContent: preview() });
@@ -87,7 +91,7 @@ async function harness({ reducedMotion = false, context = { displayMode: 'inline
     clearTimeout: id => timers.delete(id),
   });
   return {
-    app: instance, calls, lifecycle, elements, document, timers, resize,
+    app: instance, calls, qualityCalls, contexts, lifecycle, elements, document, timers, resize,
     requestOptions, stageSize,
     advance(ms) { now += ms; },
     get layoutReads() { return layoutReads; },
@@ -111,7 +115,7 @@ test('connects before requesting only fullscreen, then polls only the app frame 
   assert.equal(h.calls.length, 1);
   assert.equal(h.calls[0].name, 'pua_screen_frame');
   assert.equal(JSON.stringify(h.calls[0].arguments), '{"after_seq":0,"last_event_id":0}');
-  assert.equal([...h.timers.values()][0].delay, 250);
+  assert.equal([...h.timers.values()][0].delay, 500);
   assert.equal(h.requestOptions[0].timeout, 3000);
 });
 
@@ -275,14 +279,14 @@ test('a hidden panel stops polling, and slow calls never overlap', async () => {
   assert.equal(h.calls.length, 2);
 });
 
-test('paused overlays the retained screen, errors back off silently, teardown clears it', async () => {
+test('pause erases the previous screen, errors back off silently, teardown stays empty', async () => {
   const h = await harness({ reply: async () => ({ isError: true }) });
   h.app.ontoolresult({ structuredContent: preview({ frame: frame(4), busy: true }) });
   h.app.ontoolresult({ structuredContent: preview({ paused: true }) });
   assert.equal(h.elements.screen.hidden, false);
-  assert.equal(h.elements.image.hidden, false);
+  assert.equal(h.elements.image.hidden, true);
   assert.equal(h.elements['empty-state-text'].textContent, 'Continue on your iPhone');
-  assert.equal(h.elements.image.src, 'data:image/png;base64,test-image-only');
+  assert.equal(h.elements.image.src, undefined);
   assert.equal(h.elements['empty-state'].hidden, false);
   assert.equal(h.elements.app.dataset.busy, 'false');
   assert.equal(h.elements.device.hidden, false);
@@ -309,7 +313,7 @@ test('reduced motion shows a stationary cursor and old gestures are not replayed
   assert.equal(h.elements.cursor.animation, undefined);
   h.app.ontoolresult({ structuredContent: preview({ server_time: 10000, events: [{ id: 2, kind: 'tap', at: 1000, point: { x: 200, y: 400 } }] }) });
   assert.equal(h.elements.cursor.style.left, '90%');
-  for (let i = 0; i < 5; i++) await h.tick();
+  for (let i = 0; i < 2; i++) await h.tick();
   assert.equal(h.elements.cursor.hidden, false);
   for (let i = 0; i < 4; i++) await h.tick();
   assert.equal(h.elements.cursor.hidden, true);
@@ -504,7 +508,7 @@ test('first image decode failure explains unavailable picture in the chassis', a
   assert.equal(h.elements['empty-state'].hidden, false);
 });
 
-test('decode failure restores the last loaded image and a handoff retains it', async () => {
+test('decode failure restores the last loaded image but handoff erases it', async () => {
   const h = await harness();
   h.app.ontoolresult({ structuredContent: preview({ frame: frame(6) }) });
   h.elements.image.onload();
@@ -517,7 +521,8 @@ test('decode failure restores the last loaded image and a handoff retains it', a
   assert.equal(h.calls[0].arguments.after_seq, 0);
   h.app.ontoolresult({ structuredContent: preview({ paused: true }) });
   h.elements.image.onerror();
-  assert.equal(h.elements.image.src, previous);
+  assert.equal(h.elements.image.src, undefined);
+  assert.equal(h.elements.image.hidden, true);
   assert.equal(h.elements.screen.hidden, false);
   assert.equal(h.elements['empty-state'].hidden, false);
 });
@@ -534,44 +539,104 @@ test('unavailable and paused previews poll slowly, and focus wakes recovery imme
   assert.equal(h.timers.size, 0);
 });
 
-test('a frame requested before authentication pause cannot replace the frozen page or remove its overlay', async () => {
+test('a frame requested before authentication pause cannot restore pixels or remove the handoff prompt', async () => {
   let resolve;
   const h = await harness({ reply: () => new Promise(done => { resolve = done; }) });
-  h.app.ontoolresult({ structuredContent: preview({ frame: frame(4) }) });
-  const source = h.elements.image.src;
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 0, frame: frame(4) }) });
   await h.tick();
-  h.app.ontoolresult({ structuredContent: preview({ paused: true }) });
-  resolve({ structuredContent: preview({ frame: { ...frame(5), data: 'late-frame' }, paused: false }) });
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 1, paused: true }) });
+  resolve({ structuredContent: preview({ access_epoch: 0, frame: { ...frame(5), data: 'late-frame' }, paused: false }) });
   await flush();
-  assert.equal(h.elements.image.src, source);
+  assert.equal(h.elements.image.src, undefined);
+  assert.equal(h.elements.image.hidden, true);
   assert.equal(h.elements.app.dataset.live, 'paused');
   assert.equal(h.elements.screen.hidden, false);
   assert.equal(h.elements['empty-state'].hidden, false);
   await h.tick();
   assert.equal(h.calls.at(-1).arguments.after_seq, 0);
-  resolve({ structuredContent: preview({ frame: frame(6), paused: false }) });
+  resolve({ structuredContent: preview({ access_epoch: 2, frame: frame(6), paused: false }) });
   await flush();
   assert.equal(h.elements.screen.hidden, false);
   assert.equal(h.elements['empty-state'].hidden, true);
 });
 
-test('each handoff reason retains the page geometry and ignores incoming frames and gestures while paused', async () => {
+test('old epoch tool results cannot undo pause even when they name a replacement stream', async () => {
+  const h = await harness();
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 10, stream_id: 'current', frame: frame(4) }) });
+  h.elements.image.onload();
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 11, paused: true, pause_reason: 'authentication' }) });
+  const writes = h.imageWrites;
+  for (const fields of [{ access_epoch: 10 }, {}]) {
+    h.app.ontoolresult({ structuredContent: preview({ ...fields, stream_id: 'late-old-stream',
+      frame: { ...frame(99), data: 'late-private-pixels' }, frame_available: true, busy: true,
+      events: [{ id: 50, kind: 'tap', at: 1000, point: { x: 100, y: 200 } }] }) });
+    assert.equal(h.elements.image.src, undefined);
+    assert.equal(h.imageWrites, writes);
+    assert.equal(h.elements.app.dataset.live, 'paused');
+    assert.equal(h.elements['empty-state'].dataset.state, 'authentication');
+    assert.equal(h.elements.cursor.hidden, true);
+    assert.equal(h.elements.app.dataset.operating, 'false');
+    assert.equal(h.elements['tool-home'].disabled, true);
+    assert.equal(h.elements['tool-screenshot'].disabled, true);
+  }
+});
+
+test('a poll started after pause also rejects an old epoch response', async () => {
+  let resolve;
+  const h = await harness({ reply: () => new Promise(done => { resolve = done; }) });
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 1, paused: true, pause_reason: 'authentication' }) });
+  await h.tick();
+  resolve({ structuredContent: preview({ access_epoch: 0, frame: { ...frame(5), data: 'old-poll-pixels' } }) });
+  await flush();
+  assert.equal(h.elements.image.src, undefined);
+  assert.equal(h.elements.app.dataset.live, 'paused');
+  assert.equal(h.elements['empty-state'].dataset.state, 'authentication');
+  assert.equal(h.elements['tool-home'].disabled, true);
+});
+
+test('pause then resume cannot revive an old frame or a late decode before fresh pixels arrive', async () => {
+  const h = await harness();
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 20, frame: frame(7) }) });
+  const oldDecode = h.elements.image.onload;
+  oldDecode();
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 21, paused: true, pause_reason: 'authentication' }) });
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 22, frame_available: false }) });
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 20, frame: { ...frame(99), data: 'late-private-pixels' } }) });
+  oldDecode();
+  h.elements.image.onerror();
+  assert.equal(h.elements.image.src, undefined);
+  assert.equal(h.elements.image.hidden, true);
+  assert.equal(h.elements['empty-state'].hidden, false);
+  assert.equal(h.elements.app.dataset.frameSeq, '0');
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 22, frame: { ...frame(1), data: 'new-public-pixels' } }) });
+  h.elements.image.onload();
+  assert.equal(h.elements.image.src, 'data:image/png;base64,new-public-pixels');
+  assert.equal(h.elements['empty-state'].hidden, true);
+  // Even after recovery, an older pause or frame cannot replace current state.
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 21, paused: true }) });
+  h.app.ontoolresult({ structuredContent: preview({ access_epoch: 20, frame: frame(100) }) });
+  assert.equal(h.elements.image.src, 'data:image/png;base64,new-public-pixels');
+  assert.equal(h.elements.app.dataset.live, 'live');
+});
+
+test('each handoff reason erases pixels and ignores incoming frames and gestures while paused', async () => {
   for (const pause_reason of ['device_locked', 'authentication', 'unknown']) {
     const h = await harness();
     h.app.ontoolresult({ structuredContent: preview({ frame: { ...frame(4), width: 1800, height: 900 },
       device: { model: 'iPhone 15 Pro' }, viewport: { width: 800, height: 400 } }) });
     h.elements.image.onload();
-    const source = h.elements.image.src;
     const size = [h.elements.device.style.width, h.elements.device.style.height];
     for (let i = 0; i < 3; i++) {
       h.app.ontoolresult({ structuredContent: preview({ paused: true, pause_reason, frame_available: false,
         frame: { ...frame(5), data: 'ignored-frame' }, events: [
           { id: i + 1, kind: 'tap', at: 1000, point: { x: 200, y: 100 } },
         ] }) });
-      assert.equal(h.elements.image.src, source, pause_reason);
-      assert.equal(h.elements.image.hidden, false, pause_reason);
+      assert.equal(h.elements.image.src, undefined, pause_reason);
+      assert.equal(h.elements.image.hidden, true, pause_reason);
       assert.equal(h.elements.device.dataset.orientation, 'landscape', pause_reason);
-      assert.deepEqual([h.elements.device.style.width, h.elements.device.style.height], size);
+      for (const [index, actual] of [h.elements.device.style.width, h.elements.device.style.height].entries()) {
+        assert.ok(Math.abs(parseFloat(actual) - parseFloat(size[index])) < 1e-8);
+      }
       assert.equal(h.elements['empty-state'].hidden, false, pause_reason);
       assert.equal(h.elements['empty-state-text'].textContent, 'Continue on your iPhone', pause_reason);
       assert.equal(h.elements.cursor.hidden, true, pause_reason);
@@ -581,19 +646,19 @@ test('each handoff reason retains the page geometry and ignores incoming frames 
   }
 });
 
-test('resuming removes the overlay but frozen pixels cannot send input before a new frame decodes', async () => {
+test('resuming keeps pixels erased and rejects late decode until a fresh frame arrives', async () => {
   const h = await livePointerHarness();
-  const source = h.elements.image.src;
+  const beforePauseLoad = h.elements.image.onload;
   h.pointer('pointerdown', 60, 120);
   h.app.ontoolresult({ structuredContent: preview({ paused: true, pause_reason: 'authentication' }) });
   assert.equal(h.elements.screen.captured, undefined);
   h.pointer('pointerup', 60, 120);
   h.app.ontoolresult({ structuredContent: preview({ paused: false, frame_available: false }) });
   assert.equal(h.elements.app.dataset.live, 'connecting');
-  assert.equal(h.elements['empty-state'].hidden, true);
-  assert.equal(h.elements.image.src, source);
+  assert.equal(h.elements['empty-state'].hidden, false);
+  assert.equal(h.elements.image.src, undefined);
   h.app.ontoolresult({ structuredContent: preview({ frame_available: true }) });
-  h.elements.image.onload(); // A late load from the frozen frame is stale.
+  beforePauseLoad(); // An old decode cannot recreate erased pixels or enable input.
   h.pointer('pointerdown', 60, 120); h.pointer('pointerup', 60, 120);
   await flush();
   assert.equal(h.calls.filter(c => c.name === 'pua_screen_action').length, 0);
@@ -709,8 +774,8 @@ test('status pill names the phone model and follows the stream state', async () 
   assert.equal(h.elements['tool-refresh'].disabled, false);
   h.app.ontoolresult({ structuredContent: preview({ paused: true, pause_reason: 'device_locked' }) });
   assert.equal(h.elements['live-text'].textContent, 'Waiting for unlock');
-  assert.match(h.elements['live-text'].title, /refresh/);
-  assert.equal(h.elements.image.src, 'data:image/png;base64,test-image-only');
+  assert.match(h.elements['live-text'].title, /continue/);
+  assert.equal(h.elements.image.src, undefined);
   h.app.ontoolresult({ structuredContent: preview({ paused: true, pause_reason: 'authentication' }) });
   assert.equal(h.elements['live-text'].textContent, 'Paused');
   h.app.ontoolresult({ structuredContent: preview({ frame: frame(2), frame_available: true }) });
@@ -1022,9 +1087,74 @@ test('viewport recovery failures are throttled while frame polling continues', a
     : { structuredContent: preview({ frame_available: true,
         frame: { ...frame(), width: 1800, height: 900 }, viewport: { width: 400, height: 800 } }) }) });
   await h.tick();
-  for (let i = 0; i < 7; i++) await h.tick();
+  for (let i = 0; i < 3; i++) await h.tick();
   assert.equal(h.calls.filter(c => c.arguments.action === 'viewport').length, 1);
-  assert.equal(h.calls.filter(c => c.name === 'pua_screen_frame').length, 8);
+  assert.equal(h.calls.filter(c => c.name === 'pua_screen_frame').length, 4);
   await h.tick();
   assert.equal(h.calls.filter(c => c.arguments.action === 'viewport').length, 2);
+});
+
+
+test('quality presets coordinate viewer pacing with phone capture and show frame age', async () => {
+  const h=await harness({reply:async()=>({structuredContent:preview({frame:frame(),frame_age_ms:27,viewport:{width:400,height:800}})})});
+  await h.tick();await flush();
+  assert.equal(h.elements['frame-age'].textContent,'27 ms');
+  assert.equal(h.qualityCalls.at(-1).arguments.fps,2);
+  h.elements['tool-quality'].click();await h.tick();await flush();
+  assert.equal(h.elements['tool-quality'].textContent,'Eco');
+  h.elements['tool-quality'].click();await h.tick();await flush();
+  assert.equal(h.elements['tool-quality'].textContent,'Fast');
+  assert.equal(h.qualityCalls.at(-1).arguments.fps,8);
+  assert.equal(Math.min(...[...h.timers.values()].map(t=>t.delay)),125);
+});
+
+
+test('takeover clears pixels immediately and resumes only on an explicit button click', async () => {
+  let release;
+  const h=await harness({reply:params=>params.name==='pua_screen'
+    ? new Promise(resolve=>{release=()=>resolve({structuredContent:preview({access_epoch:params.arguments.action==='pause'?1:2,paused:params.arguments.action==='pause'})});})
+    : Promise.resolve({structuredContent:preview()})});
+  h.app.ontoolresult({structuredContent:preview({access_epoch:0,frame:frame()})});
+  h.elements['tool-pause'].click();await flush();
+  assert.equal(h.elements.image.src,undefined);
+  assert.equal(h.elements['tool-pause'].disabled,true);
+  h.app.ontoolresult({structuredContent:preview({access_epoch:0,frame:frame(9)})});
+  assert.equal(h.elements.image.src,undefined);
+  release();await flush();
+  assert.equal(h.elements['tool-pause'].textContent,'Resume');
+  h.elements['tool-pause'].click();await flush();release();await flush();
+  assert.equal(h.elements['tool-pause'].textContent,'Pause');
+  assert.deepEqual(h.calls.filter(c=>c.name==='pua_screen').map(c=>c.arguments.action),['pause','resume']);
+});
+
+
+test('switching devices clears old pixels while an ordinary reconnect can retain them',async()=>{
+  const h=await harness();
+  h.app.ontoolresult({structuredContent:preview({stream_id:'a',frame:frame(4)})});
+  h.elements.image.onload();
+  h.app.ontoolresult({structuredContent:preview({stream_id:'b',discard_previous_frame:true,frame_available:false})});
+  assert.equal(h.elements.image.src,undefined);
+  assert.equal(h.elements.app.dataset.frameSeq,'0');
+});
+
+
+test('point mode shares selected context without sending a tap or drag',async()=>{
+  const h=await harness({reply:async params=>({structuredContent:params.arguments.action==='select'
+    ? {selection:{point:{x:200,y:400},observation_id:'fresh-selection',label:'Known field'}} : preview()})});
+  h.app.ontoolresult({structuredContent:preview({frame:frame(),viewport:{width:400,height:800}})});
+  h.elements.image.onload();
+  h.elements['tool-point'].click();
+  h.elements.screen.handlers.get('pointerdown')({isPrimary:true,button:0,pointerId:1,clientX:110,clientY:220,preventDefault(){}});
+  h.elements.screen.handlers.get('pointerup')({isPrimary:true,button:0,pointerId:1,clientX:110,clientY:220,preventDefault(){}});
+  await flush();
+  assert.equal(h.calls.filter(c=>c.arguments.action==='select').length,1);
+  assert.equal(h.calls.filter(c=>['tap','drag'].includes(c.arguments.action)).length,0);
+  assert.match(JSON.stringify(h.contexts),/fresh-selection/);
+});
+
+test('panel displays MCP version and bounded batch progress',async()=>{
+  const h=await harness();
+  h.app.ontoolresult({structuredContent:preview({server_version:'0.6.0',operation_progress:{completed:2,total:5}})});
+  assert.equal(h.elements['server-version'].textContent,'v0.6.0');
+  assert.equal(h.elements['operation-progress'].textContent,'2/5');
 });

@@ -95,3 +95,11 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent
 /* Keep pointer drags inside the phone from scrolling the host panel. */
 #screen{touch-action:none;overscroll-behavior:contain;cursor:default;pointer-events:auto}
 #app[data-live="paused"] #screen,#app[data-live="offline"] #screen{cursor:default}
+
+#toolbar #tool-pause{width:64px;border-radius:17px;font:inherit;font-size:11px}
+#toolbar #tool-quality{font:inherit;font-size:11px}
+#frame-age{flex:none;color:var(--muted);font-size:10px}
+
+#toolbar{flex-wrap:wrap;justify-content:center;max-width:100%}
+#toolbar #tool-point{width:54px;border-radius:17px;font:inherit;font-size:11px}
+#operation-progress,#server-version{flex:none;color:var(--muted);font-size:10px}

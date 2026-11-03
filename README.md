@@ -83,3 +83,21 @@ sh scripts/check.sh
 The UI build is committed as a self-contained HTML resource and must match the source. Runtime USB dependencies use `npm ci --ignore-scripts` and the committed lockfile. Code changes and dependency updates require a new review; do not silently track upstream `main` on a phone installation.
 
 See [TESTING.md](TESTING.md) for validation evidence and the remaining physical-device checks. Successful unit tests or an unsigned Xcode build do not establish that a particular phone has passed acceptance testing.
+
+## Preview quality
+
+The preview's Auto / Eco / Fast button controls both viewer pacing and the phone's JPEG capture rate. Auto uses 2 FPS while idle and requests 8 FPS around activity; Eco stays at 2 FPS and Fast requests 8 FPS. These are requested limits, not guaranteed delivered frame rates. Changes wait until the phone command channel is available and do not replay gestures. Frame age is shown beside the connection state. Hidden panels stop renewing capture as before.
+
+## Startup diagnostics
+
+Failed runner starts now retain a private XCTest result bundle and a bounded, redacted failure report under the runtime's `diagnostics/` directory. Status distinguishes the runner's exit code from xcodebuild's and preserves early failure evidence. No report is uploaded. Optional broader Mac log capture is off by default; enable it deliberately with `IPHONE_USE_XCTEST_HOST_LOG=1`. Diagnostic files remain locally until removed.
+
+## Usability improvements
+
+Version 0.6.1 combines compact known-step workflows, USB connection reuse, adaptive preview, selected upstream reliability fixes and Codex integration improvements. [USABILITY.md](USABILITY.md) lists the independent branches and APIs. [TESTING.md](TESTING.md) separates passing automated checks from remaining phone acceptance work; no measured physical speedup is claimed yet.
+
+## MCP connection and ownership
+
+The installer registers a stable local launcher, so future plugin updates do not leave the CLI pointing at a removed version cache. Reconnect the MCP after installation. `pua_setup(action="status")` reports the running version and any installed-version mismatch; the preview displays its server version. On a host verified to support plugin-bundled MCP servers, `sh scripts/install.sh --native` uses that mode and removes only a recognised Balta compatibility registration.
+
+Release control with `pua_device(action="release")` between turns. The bundled Stop/Interrupt hooks do this automatically where supported and trusted; they do not stop the USB runner. A lease also expires after 60 idle seconds and is released by process exit. End the actual phone session with `pua_setup(action="stop")`. Use `scripts/phone.py --session` for persistent CLI fallback. See [USABILITY.md](USABILITY.md) for cancellation, Point mode and result contracts.

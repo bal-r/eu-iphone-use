@@ -134,6 +134,7 @@ class ScreenHub:
         self._seq = 0
         self._received_at = None
         self._stream_id = uuid.uuid4().hex
+        self._discard_previous_frame = False
         self._state_cache = None
         # Marketing name of the phone for the header; never its own name or identifiers.
         self.device = None
@@ -148,8 +149,10 @@ class ScreenHub:
         inode, mtime and size mean the cached parse is still current."""
         try:
             status = os.stat(self._state_path)
-        except OSError:
+        except FileNotFoundError:
             return {}
+        except OSError:
+            return {"paused": True, "pause_reason": "unknown"}
         signature = (status.st_ino, status.st_mtime_ns, status.st_size)
         cached = self._state_cache
         if cached and cached[0] == signature:
@@ -157,9 +160,10 @@ class ScreenHub:
         try:
             raw = json.loads(self._state_path.read_text())
         except (OSError, ValueError):
-            raw = {}
-        if not isinstance(raw, dict):
-            raw = {}
+            raw = {"paused": True, "pause_reason": "unknown"}
+        if not isinstance(raw, dict) or ("paused" in raw and not isinstance(raw["paused"], bool)) or (
+                "access_epoch" in raw and (isinstance(raw["access_epoch"], bool) or not isinstance(raw["access_epoch"], int) or raw["access_epoch"] < 0)):
+            raw = {"paused": True, "pause_reason": "unknown"}
         self._state_cache = (signature, raw)
         return raw
 
@@ -206,6 +210,8 @@ class ScreenHub:
         if not paused or not isinstance(pause_id, str) or not re.fullmatch(r"[0-9a-f]{32}", pause_id):
             pause_id = None
         return {"paused": paused, "pause_reason": reason, "pause_id": pause_id,
+                "access_epoch": raw.get("access_epoch", 0),
+                "operation_progress": raw.get("operation_progress") if isinstance(raw.get("operation_progress"),dict) else None,
                 "actors": dict(list(actors.items())[-32:]),
                 "events": events, "last_event_id": last_id if isinstance(last_id, int) and last_id >= 0 else 0,
                 "finished_at": finished_at if isinstance(finished_at, int)
@@ -236,6 +242,8 @@ class ScreenHub:
     def _wire(self, state, after_seq=0, last_event_id=0, include_frame=True):
         with self._lock:
             frame = self._frame if include_frame and not state["paused"] else None
+            if frame and frame.get("_epoch") != state["access_epoch"]:
+                frame = None
             if frame and frame["seq"] == after_seq:
                 frame = None
             if frame:
@@ -244,12 +252,13 @@ class ScreenHub:
                 # base64 if another widget requests the same sequence.
                 if "data" not in frame:
                     frame["data"] = base64.b64encode(frame["_jpeg"]).decode("ascii")
-                wire_frame = {key: value for key, value in frame.items() if key != "_jpeg"}
+                wire_frame = {key: value for key, value in frame.items() if key not in ("_jpeg", "_epoch")}
             else:
                 wire_frame = None
             return {"server_time": self._now(), "frame": wire_frame,
-                    "stream_id": self._stream_id, "device": self.device,
-                    "frame_available": self._frame is not None and not state["paused"],
+                    "operation_progress": state.get("operation_progress"),
+                    "stream_id": self._stream_id, "discard_previous_frame": self._discard_previous_frame, "device": self.device, "access_epoch": state["access_epoch"],
+                    "frame_available": self._frame is not None and self._frame.get("_epoch") == state["access_epoch"] and not state["paused"],
                     "frame_age_ms": max(0, int((time.monotonic()-self._received_at)*1000)) if self._received_at is not None else None,
                     "viewport": state["viewport"],
                     "busy": bool(state["actors"] or state["finished_at"]) and not state["paused"],
@@ -276,6 +285,14 @@ class ScreenHub:
                     self._thread.start()
         return self._wire(state, after_seq, last_event_id)
 
+    def fresh_geometry(self,max_age=2):
+        """Latest stream geometry only; never starts capture or renews its lease."""
+        if self._paused():return None
+        with self._lock:
+            if self._frame is None or self._received_at is None or time.monotonic()-self._received_at>max_age:
+                return None
+            return {"width":self._frame["width"],"height":self._frame["height"]}
+
     def close(self):
         with self._lock:
             self._lease_until = 0
@@ -291,13 +308,15 @@ class ScreenHub:
     def paused(self):
         return self._paused()
 
-    def restart(self):
-        """Drop the stream and its last frame; the next visible poll reconnects as a new stream."""
-        self.close()
+    def restart(self, discard_previous_frame=False):
+        """Reconnect while preventing another device's old pixels from being retained."""
         with self._lock:
-            self._stream_id = uuid.uuid4().hex
-            self._seq = 0
-        return self._wire(self._read_state(), include_frame=False)
+            discard=discard_previous_frame or (self._discard_previous_frame and self._seq==0)
+            self.close()
+            self._stream_id=uuid.uuid4().hex
+            self._discard_previous_frame=discard
+            self._seq=0
+        return self._wire(self._read_state(),include_frame=False)
 
     def pause_status(self):
         state = self._read_state()
@@ -308,7 +327,7 @@ class ScreenHub:
         return state["pause_id"] if state["pause_reason"] == "device_locked" else None
 
     def reconnect_pause_id(self):
-        """A user refresh may explicitly resume even a legacy pause."""
+        """Give a legacy pause an identity before checking phone evidence."""
         with self._state_transaction() as state:
             if state["paused"] and not state["pause_id"]:
                 state["pause_id"] = uuid.uuid4().hex
@@ -318,15 +337,15 @@ class ScreenHub:
         """Clear the pause that preceded a successful unlock probe.
 
         Another process may have paused for authentication during the probe.
-        READY clears only lock pauses. Explicit user refresh can resume other
-        reasons too; old releases' pauses always need that explicit action.
+        Only matching device-lock pauses can clear here. The legacy explicit
+        argument cannot grant authentication consent.
         """
         resumed = False
         if expected_id:
             with self._state_transaction() as state:
                 if state["paused"] and state["pause_id"] == expected_id and (
-                        explicit or state["pause_reason"] == "device_locked"):
-                    state.update(paused=False, pause_reason=None, pause_id=None)
+                        state["pause_reason"] == "device_locked"):
+                    state.update(paused=False, pause_reason=None, pause_id=None, access_epoch=state["access_epoch"] + 1)
                     resumed = True
         return resumed
 
@@ -338,9 +357,10 @@ class ScreenHub:
             if not (paused and reason == "device_locked" and state["paused"]
                     and state["pause_reason"] != "device_locked"):
                 state.update(paused=bool(paused), pause_reason=reason if paused else None,
-                             pause_id=uuid.uuid4().hex if paused else None)
+                             pause_id=uuid.uuid4().hex if paused else None, access_epoch=state["access_epoch"] + 1)
             if paused:
                 state["actors"] = {}
+                state["operation_progress"] = None
                 state["finished_at"] = 0
                 state["events"] = []
         if paused:
@@ -352,6 +372,11 @@ class ScreenHub:
         if cleaned:
             with self._state_transaction() as state:
                 state["viewport"] = cleaned
+
+    def set_progress(self,completed,total):
+        if not isinstance(completed,int) or not isinstance(total,int) or not 0<=completed<=total<=20:return
+        with self._state_transaction() as state:
+            if not state["paused"]:state["operation_progress"]={"completed":completed,"total":total}
 
     def begin(self, op):
         # Operation names, app IDs, text and selectors are deliberately not stored.
@@ -396,16 +421,17 @@ class ScreenHub:
         # Runs for every stream chunk: only the pause flag is needed here.
         return lease_live and not stop.is_set() and not self._paused()
 
-    def _publish_frame(self, raw, width, height, stop):
+    def _publish_frame(self, raw, width, height, stop, epoch=None):
         with self._lock:
             # A close/pause racing the read must not repopulate cleared pixels.
-            if stop.is_set():
+            state = self._read_state()
+            if stop.is_set() or state["paused"] or (epoch is not None and state["access_epoch"] != epoch):
                 return
             self._received_at = time.monotonic()
-            if self._frame and self._frame.get("_jpeg") == raw:
+            if self._frame and self._frame.get("_jpeg") == raw and self._frame.get("_epoch") == state["access_epoch"]:
                 return
             self._seq += 1
-            self._frame = {"seq": self._seq, "_jpeg": raw,
+            self._frame = {"seq": self._seq, "_jpeg": raw, "_epoch": state["access_epoch"],
                            "mimeType": "image/jpeg", "width": width, "height": height}
 
     def _command(self):
@@ -458,8 +484,11 @@ class ScreenHub:
             child.stdout.close()
 
     def _run(self, stop):
+        epoch = self._read_state()["access_epoch"]
+        def live():
+            return self._live(stop) and self._read_state()["access_epoch"] == epoch
         backoff = 0.5
-        while self._live(stop):
+        while live():
             child = None
             received = False
             try:
@@ -470,7 +499,7 @@ class ScreenHub:
                     with self._lock:
                         self._child = child
                     parser = MJPEGParser()
-                    while self._live(stop) and child.poll() is None:
+                    while live() and child.poll() is None:
                         ready, _, _ = select.select([child.stdout], [], [], 0.1)
                         if not ready:
                             continue
@@ -478,9 +507,9 @@ class ScreenHub:
                         if not chunk:
                             break
                         for raw, (width, height) in parser.feed(chunk):
-                            if not self._live(stop):
+                            if not live():
                                 break
-                            self._publish_frame(raw, width, height, stop)
+                            self._publish_frame(raw, width, height, stop, epoch)
                             received = True
             except (OSError, ValueError):
                 # Keep the last frame through a transient device/stream gap.
@@ -495,7 +524,7 @@ class ScreenHub:
             if received:
                 backoff = 0.5
             deadline = time.monotonic() + backoff
-            while self._live(stop) and time.monotonic() < deadline:
+            while live() and time.monotonic() < deadline:
                 stop.wait(0.1)
             backoff = min(2, backoff * 2)
         # Lease expiry releases USB capture, but preserves the memory-only last

@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "balta_iphone_use",
+            "tool": "pua_device",
+            "input": {
+              "action": "release",
+              "quiet": true
+            },
+            "timeout": 1
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "balta_iphone_use",
+            "tool": "pua_device",
+            "input": {
+              "action": "release",
+              "quiet": true
+            },
+            "timeout": 1
+          }
+        ]
+      }
+    ]
+  }
+}

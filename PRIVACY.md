@@ -33,3 +33,7 @@ Keep control scoped to the task you requested. Handle Apple sign-in, phone unloc
 Stop the owned runner and disconnect USB to finish a session. To remove the installation, remove the local Codex MCP/plugin registration, delete the runner from your phone, and delete the private runtime directory after stopping all jobs. Do not remove development identities belonging to unrelated projects.
 
 These are engineering privacy choices, not a claim of legal certification or guaranteed GDPR compliance. Organisation-wide retention, access controls, and the AI provider's processing terms remain the operator's responsibility.
+
+Runner startup failures can retain XCTest result bundles, device connection metadata and redacted diagnostic evidence in private runtime directories. These files may contain device or account context and are not uploaded automatically. Mac-wide filtered XCTest log capture is opt-in (`IPHONE_USE_XCTEST_HOST_LOG=1`) and limited to two 1 MiB log files per job. Local diagnostic directories remain until the user removes them.
+
+Phone coordination uses private local files containing a temporary random owner token, process ID, expiry and optional short task label. These fields are used only for local ownership and stale-observation checks. They are not an installation tracking identifier and are not uploaded. Progress contains step counts only. Point mode shares the selected target's label, coordinates and observation context with the AI host only after the user chooses that mode and a target; authentication pauses block it.

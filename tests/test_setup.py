@@ -1,5 +1,6 @@
 import os
 import io
+import itertools
 import datetime as dt
 from pathlib import Path
 import signal
@@ -130,6 +131,12 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(parsed["developer_mode"], "disabled")
         self.assertEqual(parsed["pairing_state"], "unpaired")
         self.assertEqual(parsed["unlocked"], "user_check_required")
+
+    def test_current_devicectl_accepts_missing_reality_but_rejects_simulators(self):
+        devices=[{"hardwareProperties":{"deviceType":kind,"udid":kind}} for kind in ("iPhone","iPad","Mac")]
+        devices.append({"hardwareProperties":{"deviceType":"iPhone","reality":"simulated"}})
+        parsed=wda_setup.SetupManager.parse_devices({"result":{"devices":devices}})
+        self.assertEqual([d["udid"] for d in parsed],["iPhone","iPad"])
 
     def test_job_status_redacts_and_reports_actionable_signing_failure(self):
         job = self.job()
@@ -299,6 +306,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn("id=" + config["udid"], command)
         self.assertIn(str(self.manager.state_dir / "derived_data"), command)
         self.assertIn("USE_PORT=8100", command)
+        self.assertIn("-allowProvisioningDeviceRegistration",command)
 
     def test_actual_worker_completes_failure_without_blocking_caller(self):
         # Unsupported internal action exercises a real worker, private job output,
@@ -681,13 +689,15 @@ class SetupTests(unittest.TestCase):
         wda_setup._write_json(forward / "installed.json", {"lock_hash": lock_hash})
         first = MagicMock()
         first.stdout = io.StringIO("")
-        first.poll.side_effect = [None, None, 1, 1]
+        first.poll.side_effect = itertools.chain([None, None], itertools.repeat(1))
         second = MagicMock()
         second.stdout = io.StringIO("")
-        second.poll.side_effect = [None, 1]
+        second.poll.side_effect = itertools.chain([None], itertools.repeat(1))
         with patch.object(wda_setup.SetupManager, "_source", return_value=Path(self.temp.name)), \
              patch.object(wda_setup.SetupManager, "_stop_recovery_target") as stop, \
              patch.object(wda_setup.SetupManager, "_probe_status", return_value={"ready": True}) as healthy, \
+             patch.object(wda_setup.XCTestDiagnostics, "start_host_log"), \
+             patch.object(wda_setup.XCTestDiagnostics, "failure_report", return_value={"evidence": []}), \
              patch.object(wda_setup.subprocess, "Popen", side_effect=[first, second]) as launch, \
              patch.object(wda_setup.signal, "signal"), \
              patch.object(wda_setup.os, "getpgrp", return_value=-1), \

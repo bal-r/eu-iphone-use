@@ -136,9 +136,44 @@ def compact_node(node):
     if node.get("enabled") in ("false",False):result["enabled"]=False
     if node.get("visible") in ("false",False):result["visible"]=False
     if node.get("in_viewport") is False:result["in_viewport"]=False
+    if node.get("under_bar"):result["under_bar"]=True
     rect=node.get("rect")
     if rect:result["rect"]=[round(rect[key]) for key in ("x","y","width","height")]
     return result
+
+
+LIST_TYPES={"XCUIElementTypeScrollView","XCUIElementTypeTable","XCUIElementTypeCollectionView"}
+BAR_TYPES={"XCUIElementTypeTabBar","XCUIElementTypeToolbar","XCUIElementTypeSearchField"}
+
+
+def floating_cover(tree,viewport):
+    """Elements of a list that slid under an iOS 26 floating bottom bar (tab bar, toolbar, search field).
+
+    The bars float over the list, so rows below their top edge stay in the tree and may even report
+    hittable, but a touch there lands on the bar. Only list content can slide under a bar; the bar's
+    own buttons are outside any list. Returns (bar_top, covered elements) or (None, empty set).
+    """
+    in_list=set()
+    for element in tree.iter():
+        if element.get("type") in LIST_TYPES:
+            in_list.update(id(child) for child in element.iter() if child is not element)
+    tops=[]
+    for element in tree.iter():
+        if element.get("type") in BAR_TYPES and id(element) not in in_list:
+            try:y,h=float(element.get("y","")),float(element.get("height",""))
+            except ValueError:continue
+            # Some apps report a toolbar container as tall as the screen: only real bars count.
+            if 0<h<viewport["height"]*.3 and y>viewport["height"]*.6:tops.append(y)
+    if not tops:
+        return None,set()
+    top=min(tops)-14
+    covered=set()
+    for element in tree.iter():
+        if id(element) not in in_list:continue
+        try:y,h=float(element.get("y","")),float(element.get("height",""))
+        except ValueError:continue
+        if y+h/2>=top:covered.add(id(element))
+    return top,covered
 
 
 def contains(outer,inner,slack=1):
@@ -159,20 +194,23 @@ class PhoneController:
         self._screen_targets={}
         self._viewport_cache=None
         self._source_app=None
+        self.bar_top=None
         self._deadline=None
         self.pending_input=None
         self.last_target=None
         self.snapshot_restore=None
+        self.access_check=None
+        self.progress_callback=None
         self.typing_frequency=TYPING_FREQUENCY
         self.typing_piece=TYPING_PIECE
         self.call_budget=CALL_BUDGET
         # Bounded host-side transition delay; never enable XCTest's idle wait.
         self.settle_seconds=0
 
-    def external_action(self):
+    def external_action(self,preserve_geometry=False):
         """The user acted on the phone from the preview toolbar: earlier focus and geometry may be gone."""
         self.accepted_actions+=1
-        self._viewport_cache=None
+        if not preserve_geometry:self._viewport_cache=None
         self.pending_input=None
 
     def reset(self):
@@ -252,6 +290,8 @@ class PhoneController:
         bundle=root.get("bundleId")
         self._source_app=bundle if isinstance(bundle,str) and bundle and not bundle.startswith("local.pid.") else None
         viewport=self.source_viewport(root)
+        bar_top,covered=floating_cover(tree,viewport)
+        self.bar_top=bar_top
         nodes=[]
         for element in tree.iter():
             a=element.attrib
@@ -270,6 +310,7 @@ class PhoneController:
                 continue
             node={k:a[k] for k in ("type","name","label","value","enabled","visible") if k in a}
             node["rect"]=rect;node["in_viewport"]=intersects
+            if id(element) in covered:node["under_bar"]=True
             nodes.append(node)
         return nodes,viewport
 
@@ -435,6 +476,14 @@ class PhoneController:
             element["hittable"]=self.client.session("GET","/element/"+quote(element["element_id"],safe="")+"/attribute/hittable") in (True,1,"true","1")
         return element["hittable"]
 
+    def element_type(self,element):
+        kind=element.get("type") or element.get("_type")
+        if kind is None:
+            path="/element/"+quote(element["element_id"],safe="")
+            kind=self.client.session("GET",path+"/attribute/type")
+            element["_type"]=kind
+        return kind
+
     def describe(self,element):
         rect=self.element_rect(element)
         described={"index":element["index"],**compact_node({**element,"rect":rect}),"tap":[round(rect["x"]+rect["width"]/2),round(rect["y"]+rect["height"]/2)]}
@@ -503,8 +552,15 @@ class PhoneController:
             self.last_target={"matches":matches,"chosen":"only_match_on_screen","index":candidates[0]["index"]}
             return candidates[0]
         listed=candidates[:CANDIDATE_LIMIT]
+        switches=[e for e in listed if self.element_type(e) in ("XCUIElementTypeSwitch","Switch")] if not editable else []
+        if len(switches)==1 and complete and len(listed)==len(candidates)>1:
+            switch=switches[0]
+            s_rect=self.element_rect(switch)
+            if all(contains(s_rect,self.element_rect(other)) or contains(self.element_rect(other),s_rect) for other in listed if other is not switch):
+                self.last_target={"matches":matches,"chosen":"switch_knob","index":switch["index"]}
+                return switch
         ordered=sorted(listed,key=lambda element:element["rect"]["width"]*element["rect"]["height"])
-        nested=complete and len(listed)==len(candidates)>1 and all(contains(ordered[i+1]["rect"],ordered[i]["rect"]) for i in range(len(ordered)-1))
+        nested=complete and len(listed)==len(candidates)>1 and len(switches)==0 and all(contains(ordered[i+1]["rect"],ordered[i]["rect"]) for i in range(len(ordered)-1))
         if nested:
             # Nested matches share one touch point: the innermost centre lies inside every one of them.
             for element in ordered:
@@ -532,15 +588,25 @@ class PhoneController:
         if rect["width"]<=0 or rect["height"]<=0 or not (0<=cx<viewport["width"] and 0<=cy<viewport["height"]):
             fail("offscreen_target","Target center is outside the viewport. Scroll the actual list into view, observe again and re-find the target; a stopped batch has not completed its failed step.",action_executed=False,target_rect=rect,viewport=viewport,recovery={"next_tool":"pua_observe","next_arguments":{"mode":"both"},"replay_action":False})
         path="/element/"+quote(element["element_id"],safe="")
+        if cy>=viewport["height"]*.6:
+            nodes,_=self.tree()
+            if any(node.get("under_bar") and all(abs(node["rect"][k]-rect[k])<=2 for k in ("x","y","width","height")) for node in nodes):
+                fail("occluded_target","Target lies beneath a floating bottom bar. Move the list before tapping.",action_executed=False,under_bar=True,bar_top=self.bar_top,target_rect=rect,viewport=viewport)
+        is_switch=not editable and self.element_type(element) in ("XCUIElementTypeSwitch","Switch")
+        tap_x=rect["x"]+max(rect["width"]/2,rect["width"]-26) if is_switch else cx
+        tap_y=cy
         if not self.element_hittable(element):
-            fail("occluded_target","Target was found but is not reported hittable; no tap was sent, so nothing on the phone changed. If the screen shows the target uncovered, tap tap_point with x/y; if an overlay, picker or fixed header covers it, deal with that first.",action_executed=False,target_rect=rect,tap_point={"x":round(cx),"y":round(cy)},viewport=viewport,recovery={"use":"coordinates","next_tool":"pua_tap","next_arguments":{"x":round(cx),"y":round(cy)},"replay_action":False})
+            fail("occluded_target","Target was found but is not reported hittable; no tap was sent, so nothing on the phone changed. If the screen shows the target uncovered, tap tap_point with x/y; if an overlay, picker or fixed header covers it, deal with that first.",action_executed=False,target_rect=rect,tap_point={"x":round(tap_x),"y":round(tap_y)},viewport=viewport,recovery={"use":"coordinates","next_tool":"pua_tap","next_arguments":{"x":round(tap_x),"y":round(tap_y)},"replay_action":False})
         if editable:
             if "type" not in element:element["type"]=self.client.session("GET",path+"/attribute/type")
             if element["type"] not in EDITABLE:
                 fail("not_editable","Select a readable text/search field or text view. Ask the user to handle secure fields.",secure_field=element["type"]=="XCUIElementTypeSecureTextField")
+        if is_switch:
+            element["type"]="XCUIElementTypeSwitch"
+            self.last_target={"matches":result["matches"],"chosen":"switch_knob","index":element["index"]}
         if self.screen is not None:
             if len(self._screen_targets)>=32:self._screen_targets.clear()
-            self._screen_targets[path]={"x":cx,"y":cy}
+            self._screen_targets[path]={"x":tap_x,"y":tap_y}
         element["path"]=path
         return element
 
@@ -554,6 +620,7 @@ class PhoneController:
         pred=predicate(selector)
         deadline=time.monotonic()+timeout_seconds;attempts=0
         while True:
+            if self.access_check:self.access_check()
             attempts+=1
             remaining=max(0.05,deadline-time.monotonic()) if timeout_seconds else 0.5
             found=self.client.session("POST","/elements",{"using":"predicate string","value":pred},timeout=min(remaining,2)) or []
@@ -578,18 +645,36 @@ class PhoneController:
         return result
 
     @action_result
-    def tap(self,selector=None,x=None,y=None,observation_id=None,expect=None,observe="none"):
+    def tap(self,selector=None,x=None,y=None,observation_id=None,expect=None,observe="none",optional=False):
         if observe not in ("none","tree","screenshot","both"):
             fail("invalid_argument","Invalid observation mode.")
         if expect:predicate(expect)
+        if not isinstance(optional,bool) or optional and selector is None:fail("invalid_argument","Optional taps require an explicit selector.",action_executed=False)
         if selector is not None:
             if x is not None or y is not None:
                 fail("invalid_argument","Choose selector or coordinates.")
-            try:path=self.target(selector)
+            try:
+                try:element=self.resolve(selector)
+                except WDAError as error:
+                    if optional and error.code=="no_such_element" and not error.details.get("matches"):
+                        return {"skipped":True,"action_executed":False,"action_complete":True,"reason":"optional_target_absent"}
+                    if error.code!="occluded_target" or not error.details.get("under_bar"):raise
+                    rect,height=error.details["target_rect"],error.details["viewport"]["height"]
+                    cy=rect["y"]+rect["height"]/2;x=error.details["viewport"]["width"]/2
+                    start=min(cy,error.details["bar_top"]-10)
+                    self.post("/wda/dragfromtoforduration",{"fromX":x,"fromY":start,"toX":x,"toY":max(1,start-(cy-height*.5)),"duration":.2})
+                    self._viewport_cache=None
+                    try:element=self.resolve(selector)
+                    except WDAError as again:
+                        again.details["action_executed"]=True;raise
             except WDAError as error:
                 self.switch_to_coordinates(error);raise
             chosen=self.last_target
-            self.post(path+"/click",{})
+            if self.element_type(element) in ("XCUIElementTypeSwitch","Switch"):
+                rect=self.element_rect(element)
+                self.post("/wda/tap",{"x":round(rect["x"]+max(rect["width"]/2,rect["width"]-26)),"y":round(rect["y"]+rect["height"]/2)})
+            else:
+                self.post(element["path"]+"/click",{})
         else:
             finite(x,"x");finite(y,"y")
             viewport=self.guard(observation_id)
@@ -952,7 +1037,41 @@ class PhoneController:
             result.update({key:value for key,value in error.details.items() if key in ("observation","observation_error","recovery")})
         return result
 
-    def batch(self,steps):
+    def batch(self,steps,observe="none",compact=True):
+        """Known actions in one round trip, optionally followed by one final observation.
+
+        Explicit per-step observations and all recovery evidence are retained. Full
+        detail preserves the original result shape for diagnostic callers.
+        """
+        if observe not in ("none","tree","screenshot","both") or not isinstance(compact,bool):
+            fail("invalid_argument","Invalid batch observation or detail mode.",action_executed=False)
+        started=time.monotonic()
+        result=self._batch(steps)
+        if result["complete"] and observe!="none":
+            last=result["results"][-1]
+            existing=last.get("observation") or (last if "observation_id" in last else None)
+            if existing and (observe=="tree" and "nodes" in existing or observe=="screenshot" and "image" in existing or observe=="both" and "nodes" in existing and "image" in existing):
+                result["observation"]=existing
+            elif time.monotonic()-started>=self.call_budget:
+                result["observation_pending"]=True
+                result["next_step"]="Actions completed. Observe fresh state; do not repeat completed steps."
+            else:
+                try:result["observation"]=self.observe(observe)
+                except WDAError as error:
+                    result["observation_error"]=error.as_dict()
+                    result["next_step"]="Actions completed; final observation failed. Read fresh state without replaying steps."
+        if compact:
+            omitted={"target","postcondition","text","value","elements","candidates"}
+            result["results"]=[{k:v for k,v in item.items() if k not in omitted} for item in result["results"]]
+            if result.get("observation") and result["results"]:
+                last=result["results"][-1]
+                if last.get("observation") is result["observation"]:
+                    del last["observation"]
+                elif last is result["observation"] or last.get("observation_id")==result["observation"].get("observation_id"):
+                    result["results"][-1]={"observed":True}
+        return result
+
+    def _batch(self,steps):
         if not isinstance(steps,list) or not 1<=len(steps)<=20:
             fail("invalid_argument","steps must contain 1..20 operations.")
         allowed={"tap":self.tap,"swipe":self.swipe,"type_text":self.type_text,"launch_app":self.launch_app,"press_button":self.press_button,"wait":self.wait,"observe":self.observe,"scroll_find":self.scroll_find}
@@ -964,7 +1083,9 @@ class PhoneController:
         # One call stays inside the host's tool timeout: later steps are handed back, never dropped silently.
         self._deadline=time.monotonic()+self.call_budget
         try:
+            if self.progress_callback:self.progress_callback(0,len(steps))
             for index,step in enumerate(steps):
+                if self.access_check:self.access_check()
                 if index and time.monotonic()>=self._deadline:
                     return {"completed_steps":len(results),"stopped_at":index,"stop_reason":"time_budget","results":results,"complete":False,
                             "next_step":"Send the steps from stopped_at onward in a new call. Completed steps were executed and must not be repeated."}
@@ -974,6 +1095,7 @@ class PhoneController:
                         return {"completed_steps":len(results),"stopped_at":index,"stop_reason":"input_continues","results":results+[result],"complete":False,
                                 "next_step":"Call pua_type_text with the returned continue_token until input_complete, then send the steps after stopped_at."}
                     results.append(result)
+                    if self.progress_callback:self.progress_callback(len(results),len(steps))
                     if result.get("submitted") and not result.get("submission_verified"):
                         return {"completed_steps":len(results),"stopped_at":index,"stop_reason":"submission_requires_verification","results":results,"complete":False}
                 except WDAError as exc:

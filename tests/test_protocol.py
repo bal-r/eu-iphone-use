@@ -18,7 +18,8 @@ from test_controller import FakeWDA
 
 def payload(result):
     """The model-facing data: one JSON text block, never a second structured copy."""
-    assert "structuredContent" not in result, "structuredContent would hide content blocks from the model"
+    if any(block.get("type")=="image" for block in result["content"]):
+        assert "structuredContent" not in result, "Image-bearing model results preserve their image content blocks"
     assert result["content"][0]["type"] == "text"
     return json.loads(result["content"][0]["text"])
 
@@ -40,14 +41,18 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(process.stderr, "")
         return [json.loads(line) for line in process.stdout.splitlines()]
 
-    def runtime(self):
-        runtime = Runtime(self.directory.name)
+    def runtime(self, isolated=False):
+        directory = self.directory
+        if isolated:
+            directory = tempfile.TemporaryDirectory()
+            self.addCleanup(directory.cleanup)
+        runtime = Runtime(directory.name)
         self.addCleanup(runtime.close)
         client = FakeWDA()
         runtime.client = client
         # Restore a close method for Runtime cleanup; fake transports have no sockets.
         client.close = lambda: None
-        runtime.phone = PhoneController(client, self.directory.name)
+        runtime.phone = PhoneController(client, directory.name)
         return runtime, client
 
     def serve_ready(self, runtime, arguments):
@@ -107,7 +112,7 @@ class ProtocolTests(unittest.TestCase):
     def test_ready_refusal_lock_and_unknown_fault_remain_mcp_errors(self):
         for case, expected in (("owner", "pua_recovery_required"), ("locked", "phone_locked"), ("unknown", "device-fault")):
             with self.subTest(case=case):
-                runtime, client = self.runtime()
+                runtime, client = self.runtime(isolated=True)
                 manager = Mock()
                 manager.pending_recovery.return_value = None
                 manager.recover.return_value = {"ok": False, "error": "Service ownership could not be proven"}
@@ -147,7 +152,7 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(responses[1]["result"], {})
         tools = responses[2]["result"]["tools"]
         names = [tool["name"] for tool in tools]
-        self.assertEqual(len(names), 20)
+        self.assertEqual(len(names), 21)
         self.assertEqual(len(names), len(set(names)))
         for name in ("pua_ready", "pua_setup", "pua_observe", "pua_tap", "pua_type_text", "pua_batch", "pua_collect_list", "pua_apps"):
             self.assertIn(name, names)

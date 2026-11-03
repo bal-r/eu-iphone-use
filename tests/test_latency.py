@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from iphone_use import Runtime, result_content, serve, tool_result
 from wda_client import WDAError
+from wda_access import AccessGate
+from operation_control import OperationControl
+from wda_screen import ScreenHub
 from wda_controller import PhoneController, compact_node
 import wda_image
 import wda_text
@@ -849,6 +852,13 @@ class ResultContentTests(unittest.TestCase):
 
 
 class ServeTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        hub = ScreenHub(directory.name)
+        self.addCleanup(hub.close)
+        self.access = AccessGate(hub)
+
     def run_server(self, runtime, lines):
         output = io.StringIO()
         with patch.object(sys, "stdin", lines), contextlib.redirect_stdout(output):
@@ -863,8 +873,14 @@ class ServeTests(unittest.TestCase):
     def test_preview_polls_and_pings_are_answered_while_a_phone_tool_runs(self):
         release, started, output = threading.Event(), threading.Event(), io.StringIO()
 
+        access = self.access
         class SlowRuntime:
-            def call(self, name, arguments):
+            def __init__(self):
+                self.access = access
+                self.control = OperationControl()
+
+            def call(self, name, arguments, received_epoch=None):
+                self.access.begin(name, arguments, received_epoch)
                 if name == "pua_tap":
                     started.set()
                     if not release.wait(10):
@@ -899,8 +915,14 @@ class ServeTests(unittest.TestCase):
     def test_phone_tools_keep_their_order_and_finish_before_shutdown(self):
         seen = []
 
+        access = self.access
         class OrderedRuntime:
-            def call(self, name, arguments):
+            def __init__(self):
+                self.access = access
+                self.control = OperationControl()
+
+            def call(self, name, arguments, received_epoch=None):
+                self.access.begin(name, arguments, received_epoch)
                 time.sleep(0.02 if arguments["n"] == 0 else 0)
                 seen.append(arguments["n"])
                 return {"n": arguments["n"]}

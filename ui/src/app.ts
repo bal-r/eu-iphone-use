@@ -15,7 +15,12 @@ type Gesture = {
 };
 type Preview = {
   server_time: number;
+  server_version?: string;
+  operation_progress?: {completed:number;total:number} | null;
+  coordination?: {held_by_this_chat?:boolean;holder?:{label?:string}|null};
+  access_epoch?: number;
   stream_id?: string;
+  discard_previous_frame?: boolean;
   frame: Frame | null;
   frame_available?: boolean;
   frame_age_ms?: number | null;
@@ -51,7 +56,7 @@ const tools: Record<ToolName, HTMLButtonElement> = {
   screenshot: document.getElementById('tool-screenshot') as HTMLButtonElement,
 };
 const app = new App(
-  { name: 'iPhone Use Screen', version: '0.4.0' },
+  { name: 'iPhone Use Screen', version: '0.6.1' },
   { availableDisplayModes: ['fullscreen'] },
   { autoResize: false },
 );
@@ -61,6 +66,7 @@ let disposed = false;
 let inFlight = false;
 let frameSeq = 0;
 let frameGeneration = 0;
+let accessEpoch = -1;
 let streamId: string | undefined;
 let eventId = 0;
 let dimensions: Size | undefined;
@@ -76,7 +82,75 @@ let suspended = false;
 let lastGoodFrame: { source: string; size: Size } | undefined;
 let acting = false;
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-const FRAME_INTERVAL = 250;
+type PreviewMode = 'auto' | 'economy' | 'interactive';
+let previewMode: PreviewMode = 'auto';
+let activeUntil = -Infinity;
+let captureFps: number | undefined;
+let settingCapture = false;
+const qualityButton = document.getElementById('tool-quality')! as HTMLButtonElement;
+const ageLabel = document.getElementById('frame-age')!;
+const progressLabel = document.getElementById('operation-progress')!;
+const versionLabel = document.getElementById('server-version')!;
+const pointButton = document.getElementById('tool-point')! as HTMLButtonElement;
+let selectingTarget = false;
+function togglePoint() {
+  selectingTarget = !selectingTarget;
+  pointButton.textContent = selectingTarget ? 'Choose' : 'Point';
+  pointButton.title = selectingTarget ? 'Click a visible control to share its context with the agent' : 'Select a target without sending a phone tap';
+}
+pointButton.addEventListener('click',togglePoint);
+async function shareSelection(point:Point,size:Size) {
+  if (typeof app.updateModelContext !== 'function') { notify('This host cannot share target context; describe the target in chat',true);return; }
+  acting = true;syncTools();
+  const generation = frameGeneration;
+  try {
+    const result = await app.callServerTool({name:'pua_screen_action',arguments:{action:'select',x:point.x,y:point.y,width:size.width,height:size.height}}, {timeout:ACTION_TIMEOUT});
+    if (result.isError || generation !== frameGeneration) { notify('Selection unavailable; inspect the current screen',true);return; }
+    const data = result.structuredContent as {selection?:unknown};
+    await app.updateModelContext({content:[{type:'text',text:JSON.stringify({iphone_selection:data.selection,instruction:'User selected this target. Observe fresh state before acting on their next instruction.'})}]});
+    notify('Target shared. Tell the agent what to do.');
+    selectingTarget = false;pointButton.textContent = 'Point';
+  } catch { notify('Could not share context; describe the target in chat',true); }
+  finally {acting = false;syncTools();}
+}
+const pauseButton = document.getElementById('tool-pause')! as HTMLButtonElement;
+let changingAccess = false;
+async function toggleAccess() {
+  if (changingAccess) return;
+  const action = root.dataset.live === 'paused' ? 'resume' : 'pause';
+  changingAccess = true;
+  pauseButton.disabled = true;
+  if (action === 'pause') { frameGeneration++; clearFrame(); setLive('paused'); showEmpty('authentication'); }
+  try {
+    const result = await app.callServerTool({name:'pua_screen',arguments:{action}}, {timeout:ACTION_TIMEOUT});
+    if (result.isError) notify('Access change incomplete; inspect connection',true);
+    else { changingAccess = false; consume(result.structuredContent); }
+  } catch { notify('Access change incomplete; inspect connection',true); }
+  finally { changingAccess = false; pauseButton.disabled = false; schedule(0); }
+}
+pauseButton.addEventListener('click',toggleAccess);
+function frameInterval() {
+  return previewMode === 'interactive' || (previewMode === 'auto' && (acting || root.dataset.busy === 'true' || performance.now() < activeUntil)) ? 125 : 500;
+}
+async function syncCaptureRate(fps: number) {
+  if (!visible() || root.dataset.live !== 'live' || root.dataset.inputBusy === 'true' || settingCapture || captureFps === fps) return;
+  settingCapture = true;
+  try {
+    const result = await app.callServerTool({name:'pua_screen_action',arguments:{action:'quality',fps}}, {timeout:ACTION_TIMEOUT});
+    if (!result.isError) captureFps = fps;
+  } catch { /* Retry the idempotent setting on a later poll; never retry a gesture. */ }
+  finally { settingCapture = false; }
+}
+function changeQuality() {
+  const modes: PreviewMode[] = ['auto','economy','interactive'];
+  previewMode = modes[(modes.indexOf(previewMode)+1)%modes.length];
+  qualityButton.textContent = {auto:'Auto',economy:'Eco',interactive:'Fast'}[previewMode];
+  qualityButton.title = `Preview: ${previewMode}. Click to change.`;
+  if (timer) clearTimeout(timer);
+  timer = undefined;
+  schedule(0);
+}
+qualityButton.addEventListener('click',changeQuality);
 const REQUEST_TIMEOUT = 3000;
 // A screenshot or Home may queue behind the phone operation already running.
 const ACTION_TIMEOUT = 12000;
@@ -89,6 +163,7 @@ const DONE: Record<ToolName, string> = { refresh: 'Connection refreshed', home: 
 const FAILED: Record<string, string> = {
   device_busy: 'Device busy; try again shortly',
   preview_paused: 'Paused for authentication',
+  access_paused: 'Phone access paused; finish authentication, then resume',
   clipboard_unavailable: 'Could not copy screenshot',
   pua_unreachable: 'iPhone disconnected',
   phone_locked: 'Unlock your iPhone',
@@ -330,10 +405,24 @@ function showGesture(gesture: Gesture) {
 function consume(value: unknown) {
   if (disposed || !value || typeof value !== 'object') return;
   const preview = value as Partial<Preview>;
+  if (changingAccess && preview.paused !== true && root.dataset.live === 'paused') return;
+  pauseButton.textContent = preview.paused ? 'Resume' : 'Pause';
+  if (typeof preview.server_version === 'string') versionLabel.textContent = `v${preview.server_version}`;
+  const progress = preview.operation_progress;
+  progressLabel.textContent = progress && Number.isInteger(progress.completed) && Number.isInteger(progress.total) && progress.completed >= 0 && progress.completed <= progress.total && progress.total <= 20 ? `${progress.completed}/${progress.total}` : '';
+  const other = preview.coordination?.holder && !preview.coordination.held_by_this_chat;
+  if (other) notify(`Phone in use: ${preview.coordination?.holder?.label ?? 'another conversation'}`);
+  if (Number.isSafeInteger(preview.access_epoch)) {
+    if (preview.access_epoch! < accessEpoch) return;
+    if (preview.access_epoch! > accessEpoch && accessEpoch >= 0) clearFrame();
+    accessEpoch = preview.access_epoch!;
+  } else if (accessEpoch >= 0) return;
   let nextAppearance = deviceAppearance;
   if (typeof preview.service_ready === 'boolean') serviceUnavailable = !preview.service_ready;
   if (typeof preview.stream_id === 'string' && preview.stream_id !== streamId) {
     streamId = preview.stream_id;
+    captureFps = undefined;
+    if (preview.discard_previous_frame) { frameGeneration++; clearFrame(); decodedAt = freshUntil = -Infinity; }
     // A replacement stream may belong to another phone; wait for its model.
     nextAppearance = 'plain';
     model.textContent = 'iPhone';
@@ -358,11 +447,10 @@ function consume(value: unknown) {
     if (!dimensions) fitFrame();
   }
   if (preview.paused === true) {
-    // Freeze the already displayed page underneath the handoff overlay. Invalidate
-    // older requests and input freshness; resume must fetch a frame again.
+    // Erase prior pixels and reject old-generation responses after handoff.
     frameGeneration++;
     cancelPointer();
-    retainFrame();
+    clearFrame();
     decodedAt = freshUntil = -Infinity;
     frameSeq = 0;
     root.dataset.frameSeq = '0';
@@ -371,8 +459,8 @@ function consume(value: unknown) {
     setLive('paused');
     liveText.textContent = preview.pause_reason === 'device_locked' ? 'Waiting for unlock' : LIVE_TEXT.paused;
     liveText.title = preview.pause_reason === 'device_locked'
-      ? 'Unlock your iPhone, then continue or refresh the preview'
-      : 'Preview paused; complete authentication on the phone, then continue or refresh';
+      ? 'Unlock your iPhone, then continue'
+      : 'Phone access paused; complete authentication, then explicitly resume';
     showEmpty(preview.pause_reason === 'device_locked' ? 'locked'
       : preview.pause_reason === 'authentication' ? 'authentication' : 'paused');
     return;
@@ -415,7 +503,7 @@ function consume(value: unknown) {
     screen.hidden = false;
   }
   if (typeof preview.busy === 'boolean') root.dataset.busy = String(preview.busy);
-  root.dataset.inputBusy = String(preview.input_busy ?? preview.busy);
+  root.dataset.inputBusy = String(!!other || (preview.input_busy ?? preview.busy));
   // Keep the edge light on between tools and while the model plans its next action.
   if (preview.busy === true) root.dataset.operating = 'true';
   if (Array.isArray(preview.events)) {
@@ -444,7 +532,7 @@ async function poll() {
   if (!visible() || inFlight) return;
   inFlight = true;
   const started = performance.now();
-  let nextDelay = FRAME_INTERVAL;
+  let nextDelay = frameInterval();
   try {
     if (!ready) await connect();
     if (!visible()) return;
@@ -459,8 +547,13 @@ async function poll() {
     await recoverViewport();
     failures = 0;
     const preview = result.structuredContent as Partial<Preview> | undefined;
+    if (preview?.busy) activeUntil = performance.now() + 2000;
+    const interval = frameInterval();
+    if (typeof preview?.frame_age_ms === 'number') ageLabel.textContent = preview.frame_age_ms > 2000 ? 'Frame stale' : `${Math.round(preview.frame_age_ms)} ms`;
+    else ageLabel.textContent = '';
+    if (!preview?.paused) void syncCaptureRate(interval === 125 ? 8 : 2);
     nextDelay = preview?.paused || preview?.frame_available === false
-      ? 1000 : Math.max(0, FRAME_INTERVAL - (performance.now() - started));
+      ? 1000 : Math.max(0, interval - (performance.now() - started));
   } catch {
     failures += 1;
     nextDelay = Math.min(2000, 500 * failures);
@@ -576,6 +669,10 @@ function pointerUp(event: PointerEvent) {
   cancelPointer();
   if (!end || !canPoint() || start.generation !== frameGeneration || start.stream !== streamId
       || start.size.width !== viewport?.width || start.size.height !== viewport?.height) return;
+  if (selectingTarget) {
+    if (!start.moved) void shareSelection(end,start.size);
+    return;
+  }
   // Long presses and looped drags are deliberately not converted into surprise taps.
   if (!start.moved && performance.now() - start.at > 700) return;
   if (start.moved && Math.hypot(end.x - start.point.x, end.y - start.point.y) < 3) return;
@@ -584,6 +681,7 @@ function pointerUp(event: PointerEvent) {
     ...(start.moved ? { to_x: end.x, to_y: end.y, duration: Math.max(.05, Math.min(1, (performance.now() - start.at) / 1000)) } : {}) });
 }
 async function sendPointer(args: Record<string, string | number>) {
+  activeUntil = performance.now() + 2000;
   acting = true;
   syncTools();
   try {
@@ -709,6 +807,9 @@ function dispose() {
   toastTimer = undefined;
   toast.hidden = true;
   cancelPointer();
+  qualityButton.removeEventListener('click',changeQuality);
+  pauseButton.removeEventListener('click',toggleAccess);
+  pointButton.removeEventListener('click',togglePoint);
   screen.removeEventListener('wheel', wheel);
   for (const [name, handler] of Object.entries(pointerHandlers)) screen.removeEventListener(name, handler as EventListener);
   for (const [name, handler] of toolHandlers) tools[name].removeEventListener('click', handler);
