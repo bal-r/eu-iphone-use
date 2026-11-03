@@ -13,6 +13,8 @@ This candidate includes the five independent usability branches, selected upstre
 | Widget DOM and interaction tests | 65 passed |
 | UI typecheck and production bundle | Passed |
 | Plugin manifests, tool-schema budgets and package validation | Passed |
+| Real stdio MCP startup/catalog/ping smoke | Passed; version 0.6.1, 21 tools |
+| Installed package comparison | All 58 packaged files match reviewed sources; stable launcher reports 0.6.1 and its install marker is private |
 
 Coverage includes queued cancellation, cancellation between batch steps, uncertainty during a write, progress without app content, ownership contention and crash/idle release, concurrent lease initialisation, optional absent selectors, Point selection without touch input, and typed setup/batch results.
 

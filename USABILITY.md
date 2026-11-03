@@ -1,6 +1,6 @@
-# Usability work — integration candidate
+# Usability and Codex integration — 0.6.1
 
-All changes are developed in an isolated checkout; the original checkout is unchanged. `feat/usability-integration` combines the first usability work. `feat/codex-integration` adds the Codex improvements and acceptance fixes as version 0.6.1. The local plugin is being upgraded for controlled acceptance; these branches have not yet merged to main.
+All changes were developed in an isolated checkout; the original checkout remains unchanged. `feat/usability-integration` combines the first usability work. `feat/codex-integration` adds the Codex improvements and acceptance fixes as version 0.6.1. These changes are integrated into private main, and the local plugin is installed for controlled acceptance. Physical-phone and native-host limitations remain recorded in TESTING.md.
 
 ## Independent first five branches
 

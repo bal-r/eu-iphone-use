@@ -92,12 +92,12 @@ The preview's Auto / Eco / Fast button controls both viewer pacing and the phone
 
 Failed runner starts now retain a private XCTest result bundle and a bounded, redacted failure report under the runtime's `diagnostics/` directory. Status distinguishes the runner's exit code from xcodebuild's and preserves early failure evidence. No report is uploaded. Optional broader Mac log capture is off by default; enable it deliberately with `IPHONE_USE_XCTEST_HOST_LOG=1`. Diagnostic files remain locally until removed.
 
-## Usability candidate
+## Usability improvements
 
-The 0.5.0 integration branch combines faster known-step workflows, USB connection reuse, adaptive preview and selected upstream reliability fixes. [USABILITY.md](USABILITY.md) lists the independent branches, APIs and remaining phone acceptance checks.
+Version 0.6.1 combines compact known-step workflows, USB connection reuse, adaptive preview, selected upstream reliability fixes and Codex integration improvements. [USABILITY.md](USABILITY.md) lists the independent branches and APIs. [TESTING.md](TESTING.md) separates passing automated checks from remaining phone acceptance work; no measured physical speedup is claimed yet.
 
 ## MCP connection and ownership
 
-The 0.6.0 installer registers a stable local launcher, so future plugin updates do not leave the CLI pointing at a removed version cache. Reconnect the MCP after installation. `pua_setup(action="status")` reports the running version and any installed-version mismatch; the preview displays its server version. On a host verified to support plugin-bundled MCP servers, `sh scripts/install.sh --native` uses that mode and removes only a recognised Balta compatibility registration.
+The installer registers a stable local launcher, so future plugin updates do not leave the CLI pointing at a removed version cache. Reconnect the MCP after installation. `pua_setup(action="status")` reports the running version and any installed-version mismatch; the preview displays its server version. On a host verified to support plugin-bundled MCP servers, `sh scripts/install.sh --native` uses that mode and removes only a recognised Balta compatibility registration.
 
 Release control with `pua_device(action="release")` between turns. The bundled Stop/Interrupt hooks do this automatically where supported and trusted; they do not stop the USB runner. A lease also expires after 60 idle seconds and is released by process exit. End the actual phone session with `pua_setup(action="stop")`. Use `scripts/phone.py --session` for persistent CLI fallback. See [USABILITY.md](USABILITY.md) for cancellation, Point mode and result contracts.
