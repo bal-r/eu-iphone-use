@@ -15,6 +15,7 @@ type Gesture = {
 };
 type Preview = {
   server_time: number;
+  access_epoch?: number;
   stream_id?: string;
   frame: Frame | null;
   frame_available?: boolean;
@@ -61,6 +62,7 @@ let disposed = false;
 let inFlight = false;
 let frameSeq = 0;
 let frameGeneration = 0;
+let accessEpoch = -1;
 let streamId: string | undefined;
 let eventId = 0;
 let dimensions: Size | undefined;
@@ -83,6 +85,22 @@ let captureFps: number | undefined;
 let settingCapture = false;
 const qualityButton = document.getElementById('tool-quality')! as HTMLButtonElement;
 const ageLabel = document.getElementById('frame-age')!;
+const pauseButton = document.getElementById('tool-pause')! as HTMLButtonElement;
+let changingAccess = false;
+async function toggleAccess() {
+  if (changingAccess) return;
+  const action = root.dataset.live === 'paused' ? 'resume' : 'pause';
+  changingAccess = true;
+  pauseButton.disabled = true;
+  if (action === 'pause') { frameGeneration++; clearFrame(); setLive('paused'); showEmpty('authentication'); }
+  try {
+    const result = await app.callServerTool({name:'pua_screen',arguments:{action}}, {timeout:ACTION_TIMEOUT});
+    if (result.isError) notify('Access change incomplete; inspect connection',true);
+    else { changingAccess = false; consume(result.structuredContent); }
+  } catch { notify('Access change incomplete; inspect connection',true); }
+  finally { changingAccess = false; pauseButton.disabled = false; schedule(0); }
+}
+pauseButton.addEventListener('click',toggleAccess);
 function frameInterval() {
   return previewMode === 'interactive' || (previewMode === 'auto' && (acting || root.dataset.busy === 'true' || performance.now() < activeUntil)) ? 125 : 500;
 }
@@ -117,6 +135,7 @@ const DONE: Record<ToolName, string> = { refresh: 'Connection refreshed', home: 
 const FAILED: Record<string, string> = {
   device_busy: 'Device busy; try again shortly',
   preview_paused: 'Paused for authentication',
+  access_paused: 'Phone access paused; finish authentication, then resume',
   clipboard_unavailable: 'Could not copy screenshot',
   pua_unreachable: 'iPhone disconnected',
   phone_locked: 'Unlock your iPhone',
@@ -358,6 +377,13 @@ function showGesture(gesture: Gesture) {
 function consume(value: unknown) {
   if (disposed || !value || typeof value !== 'object') return;
   const preview = value as Partial<Preview>;
+  if (changingAccess && preview.paused !== true && root.dataset.live === 'paused') return;
+  pauseButton.textContent = preview.paused ? 'Resume' : 'Pause';
+  if (Number.isSafeInteger(preview.access_epoch)) {
+    if (preview.access_epoch! < accessEpoch) return;
+    if (preview.access_epoch! > accessEpoch && accessEpoch >= 0) clearFrame();
+    accessEpoch = preview.access_epoch!;
+  } else if (accessEpoch >= 0) return;
   let nextAppearance = deviceAppearance;
   if (typeof preview.service_ready === 'boolean') serviceUnavailable = !preview.service_ready;
   if (typeof preview.stream_id === 'string' && preview.stream_id !== streamId) {
@@ -387,11 +413,10 @@ function consume(value: unknown) {
     if (!dimensions) fitFrame();
   }
   if (preview.paused === true) {
-    // Freeze the already displayed page underneath the handoff overlay. Invalidate
-    // older requests and input freshness; resume must fetch a frame again.
+    // Erase prior pixels and reject old-generation responses after handoff.
     frameGeneration++;
     cancelPointer();
-    retainFrame();
+    clearFrame();
     decodedAt = freshUntil = -Infinity;
     frameSeq = 0;
     root.dataset.frameSeq = '0';
@@ -400,8 +425,8 @@ function consume(value: unknown) {
     setLive('paused');
     liveText.textContent = preview.pause_reason === 'device_locked' ? 'Waiting for unlock' : LIVE_TEXT.paused;
     liveText.title = preview.pause_reason === 'device_locked'
-      ? 'Unlock your iPhone, then continue or refresh the preview'
-      : 'Preview paused; complete authentication on the phone, then continue or refresh';
+      ? 'Unlock your iPhone, then continue'
+      : 'Phone access paused; complete authentication, then explicitly resume';
     showEmpty(preview.pause_reason === 'device_locked' ? 'locked'
       : preview.pause_reason === 'authentication' ? 'authentication' : 'paused');
     return;
@@ -745,6 +770,7 @@ function dispose() {
   toast.hidden = true;
   cancelPointer();
   qualityButton.removeEventListener('click',changeQuality);
+  pauseButton.removeEventListener('click',toggleAccess);
   screen.removeEventListener('wheel', wheel);
   for (const [name, handler] of Object.entries(pointerHandlers)) screen.removeEventListener(name, handler as EventListener);
   for (const [name, handler] of toolHandlers) tools[name].removeEventListener('click', handler);

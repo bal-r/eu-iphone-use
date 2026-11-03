@@ -11,7 +11,7 @@ class PreviewGeometryTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.runtime=Runtime(self.tmp.name)
-        self.client=FakeWDA();self.screen=MockScreen()
+        self.client=FakeWDA();self.screen=MockScreen(self.tmp.name)
         self.runtime.screen.close()
         self.runtime.client=self.client;self.runtime.screen=self.screen
         self.runtime.phone=PhoneController(self.client,self.tmp.name)

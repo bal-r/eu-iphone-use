@@ -25,20 +25,21 @@ def main():
         runtime = Runtime(args.state_dir, args.url)
         result = runtime.call(args.tool, arguments)
         if args.export_images and runtime.phone.capture_paths:
-            destination = Path(args.export_images).expanduser().resolve()
-            destination.mkdir(parents=True, exist_ok=True, mode=0o700)
-            replacements = {}
-            for source in runtime.phone.capture_paths:
-                target = destination / source.name
-                fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(fd, "wb") as output, source.open("rb") as image:
-                    shutil.copyfileobj(image, output)
-                replacements[str(source)] = str(target)
-            def exported(value):
-                if isinstance(value, dict): return {k: exported(v) for k, v in value.items()}
-                if isinstance(value, list): return [exported(v) for v in value]
-                return replacements.get(value, value) if isinstance(value, str) else value
-            result = exported(result)
+            with runtime.access.delivery():
+                destination = Path(args.export_images).expanduser().resolve()
+                destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+                replacements = {}
+                for source in runtime.phone.capture_paths:
+                    target = destination / source.name
+                    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                    with os.fdopen(fd, "wb") as output, source.open("rb") as image:
+                        shutil.copyfileobj(image, output)
+                    replacements[str(source)] = str(target)
+                def exported(value):
+                    if isinstance(value, dict): return {k: exported(v) for k, v in value.items()}
+                    if isinstance(value, list): return [exported(v) for v in value]
+                    return replacements.get(value, value) if isinstance(value, str) else value
+                result = exported(result)
     except PUAError as exc:
         result = {"error": exc.as_dict()}
     except (ValueError, TypeError) as exc:
@@ -46,7 +47,15 @@ def main():
     finally:
         if runtime:
             runtime.close()
-    print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+    try:
+        if runtime:
+            with runtime.access.delivery():
+                print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+        else:
+            print(json.dumps(result, ensure_ascii=False, allow_nan=False))
+    except PUAError as exc:
+        result = {"error": exc.as_dict()}
+        print(json.dumps(result, ensure_ascii=False, allow_nan=False))
     return 1 if "error" in result or (args.tool == "pua_ready" and result.get("ready") is not True) else 0
 
 
