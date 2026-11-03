@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "balta_iphone_use": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "${PLUGIN_ROOT}/server/iphone_use.py"
+      ],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

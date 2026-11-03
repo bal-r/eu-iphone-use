@@ -1,0 +1,12 @@
+--- a/WebDriverAgentLib/Routing/FBWebServer.m
++++ b/WebDriverAgentLib/Routing/FBWebServer.m
+@@ -82,2 +82,2 @@
+-  [self.server setDefaultHeader:@"Access-Control-Allow-Origin" value:@"*"];
+-  [self.server setDefaultHeader:@"Access-Control-Allow-Headers" value:@"Content-Type, X-Requested-With"];
++  // Balta Tech: no cross-origin browser access.
++  // The authenticated Mac proxy also rejects every Origin header.
+@@ -94 +94 @@
+-  NSString *bindingIP = FBConfiguration.sharedInstance.bindingIPAddress;
++  NSString *bindingIP = @"127.0.0.1"; // Balta Tech: USB loopback only.
+@@ -136,0 +137 @@
++  self.screenshotsBroadcaster.interface = @"127.0.0.1"; // Balta Tech: no LAN stream.

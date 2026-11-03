@@ -1,0 +1,24 @@
+{
+  "name": "iphone-use",
+  "version": "0.4.0",
+  "description": "Private iPhone automation over USB, with no product telemetry and locally restricted device services.",
+  "author": {
+    "name": "Balta Tech"
+  },
+  "license": "MIT",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Balta Tech iPhone Use",
+    "shortDescription": "Private iPhone control",
+    "longDescription": "Control your own iPhone over USB. No usage tracking, no online app lookup, and no developer remote relay. Phone screens you share are processed by your chosen AI provider.",
+    "developerName": "Balta Tech",
+    "category": "Productivity",
+    "logo": "./assets/icon.svg",
+    "composerIcon": "./assets/icon.svg",
+    "defaultPrompt": [
+      "Set up my USB-connected iPhone and verify the connection in Calculator.",
+      "Use my iPhone for this task and verify the final result."
+    ]
+  }
+}
