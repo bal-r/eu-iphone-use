@@ -1,5 +1,17 @@
 # Changes
 
+## 0.5.0 — usability candidate
+
+- Compact known-step batches can return a final observation without another agent call.
+- Reuse the authenticated USB HTTP connection; failed writes are never automatically replayed.
+- Reuse preview geometry while fresh frame dimensions agree; refresh after rotation or stale metadata.
+- Add Auto / Eco / Fast preview pacing and capture presets, frame age and explicit Pause/Resume takeover.
+- Support missing CoreDevice reality metadata and first-time signing-device registration.
+- Improve native switch targeting, covered-row recovery, cross-process authentication pauses, preview identity refresh and private startup diagnostics.
+- Broader host diagnostic logging remains off unless explicitly enabled.
+
+This candidate is validated with isolated regression fixtures. It has not yet undergone a physical-phone performance or takeover acceptance session.
+
 ## 0.4.0 — Balta Tech private derivative
 
 Removed upstream product telemetry, tracking configuration, dashboards, online app search, and unused host adapters. Added hash-verified phone loopback hardening, an authenticated browser-resistant Mac USB proxy, separate private runtime state, and observation-image cleanup on orderly shutdown.

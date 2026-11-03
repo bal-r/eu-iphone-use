@@ -28,8 +28,8 @@ import wda_image
 from local_auth import connection_token
 
 PUAError=WDAError
-VERSION="0.4.0"
-SCREEN_URI="ui://iphone-use/phone-0.4.0.html"
+VERSION="0.5.0"
+SCREEN_URI="ui://iphone-use/phone-0.5.0.html"
 # Codex scopes reuse to the host, chat, server and UI resource. A stable result
 # ID keeps repeated READY/open/pause/resume calls in that chat on one panel,
 # including after the MCP process reconnects; no device identifiers are needed.

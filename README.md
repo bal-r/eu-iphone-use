@@ -91,3 +91,7 @@ The preview's Auto / Eco / Fast button controls both viewer pacing and the phone
 ## Startup diagnostics
 
 Failed runner starts now retain a private XCTest result bundle and a bounded, redacted failure report under the runtime's `diagnostics/` directory. Status distinguishes the runner's exit code from xcodebuild's and preserves early failure evidence. No report is uploaded. Optional broader Mac log capture is off by default; enable it deliberately with `IPHONE_USE_XCTEST_HOST_LOG=1`. Diagnostic files remain locally until removed.
+
+## Usability candidate
+
+The 0.5.0 integration branch combines faster known-step workflows, USB connection reuse, adaptive preview and selected upstream reliability fixes. [USABILITY.md](USABILITY.md) lists the independent branches, APIs and remaining phone acceptance checks.

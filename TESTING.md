@@ -1,8 +1,26 @@
 # Validation status
 
-This document records checks against the Balta Tech 0.4.0 source. It is updated when validation completes. Physical-device testing is a distinct acceptance step and must not be inferred from unit tests or an unsigned build.
+This document records the original Balta Tech 0.4.0 acceptance evidence and the separate 0.5.0 usability candidate checks. It is updated when validation completes. Physical-device testing is a distinct acceptance step and must not be inferred from unit tests or an unsigned build.
 
-## Automated checks
+## 0.5.0 usability candidate — 3 November 2026
+
+The isolated `feat/usability-integration` checkout passes:
+
+| Check | Result |
+| --- | --- |
+| Complete Python regression suite | 500 passed |
+| Authenticated proxy/transport fixtures | 6 passed; sequential read/write connection reuse and no replay after interrupted mutation verified |
+| Widget DOM and interaction tests | 63 passed |
+| UI typecheck and self-contained production bundle | Passed |
+| Plugin manifests, tool-schema budgets and package round-trip | Passed |
+| Real stdio MCP startup/catalog/ping smoke | Passed; version 0.5.0, 20 tools |
+| Whitespace/diff check | Passed |
+
+The tests use temporary runtime directories and synthetic phone/Xcode endpoints. No connected iPhone was operated, no installed plugin was replaced, and no service was restarted for this work. The phone runner revision, loopback patch and third-party dependency versions are unchanged.
+
+Physical acceptance of 0.5.0 remains pending: sustained preview/control operation, actual delivered frame rates and end-to-end task latency, rotation, cross-process authentication takeover, stop/reconnect, and first-device signing registration. The 0.4.0 physical results below do not establish these new behaviours. See [USABILITY.md](USABILITY.md).
+
+## Original 0.4.0 automated checks
 
 Validated locally on 3 November 2026 (Mac, Xcode 26.2, Python 3.14.0, Node.js 25.6.0):
 

@@ -27,3 +27,15 @@ The phone runner derives from [Appium WebDriverAgent](https://github.com/appium/
 The reviewed diff is in [patches/wda-loopback.patch](patches/wda-loopback.patch). [server/wda_hardening.py](server/wda_hardening.py) verifies the original and patched file hashes. Unrecognised modifications are rejected rather than reset. No signing identity, personal device identifier, Apple credential, or provisioning profile is included in this repository.
 
 Changes from upstream must be reviewed deliberately. Updating a pinned revision requires updating the approved patch, hashes, dependencies, and validation evidence together.
+
+## Balta Tech 0.5.0 usability candidate
+
+The upstream base remains 0.3.16; this release selectively adapts contributions rather than updating to unreviewed upstream code.
+
+- Independent branches add compact batch results with one final observation, authenticated USB connection reuse without action replay, fresh-frame-validated geometry caching, adaptive preview capture/pacing, and first-device setup fixes from issues [#37](https://github.com/zhongerxin/iPhone-use/issues/37) and [#38](https://github.com/zhongerxin/iPhone-use/issues/38).
+- Adapted native switch targeting and bounded covered-row recovery from PRs [#34](https://github.com/zhongerxin/iPhone-use/pull/34) and [#35](https://github.com/zhongerxin/iPhone-use/pull/35); narrow switch geometry is clamped within its bounds.
+- Adapted the cross-process authentication pause and stale-response gate from PR [#45](https://github.com/zhongerxin/iPhone-use/pull/45), preserving our proxy authentication and telemetry removal. Added an explicit Pause/Resume button and guarded CLI image export. Refresh cannot resume authentication.
+- Adapted model-identity refresh, retry and old-device frame invalidation from PR [#53](https://github.com/zhongerxin/iPhone-use/pull/53). No additional hardware-model claims are introduced.
+- Adapted startup failure evidence from PR [#26](https://github.com/zhongerxin/iPhone-use/pull/26). Unlike that proposal, broader host log capture is opt-in in this fork; private failure reports remain local.
+
+Original and contributing authors retain their MIT attribution. The phone runner revision and loopback patch are unchanged. See [USABILITY.md](USABILITY.md) for branch boundaries, integration and physical acceptance work.
