@@ -131,6 +131,12 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(parsed["pairing_state"], "unpaired")
         self.assertEqual(parsed["unlocked"], "user_check_required")
 
+    def test_current_devicectl_accepts_missing_reality_but_rejects_simulators(self):
+        devices=[{"hardwareProperties":{"deviceType":kind,"udid":kind}} for kind in ("iPhone","iPad","Mac")]
+        devices.append({"hardwareProperties":{"deviceType":"iPhone","reality":"simulated"}})
+        parsed=wda_setup.SetupManager.parse_devices({"result":{"devices":devices}})
+        self.assertEqual([d["udid"] for d in parsed],["iPhone","iPad"])
+
     def test_job_status_redacts_and_reports_actionable_signing_failure(self):
         job = self.job()
         job["state"] = "failed"
@@ -299,6 +305,7 @@ class SetupTests(unittest.TestCase):
         self.assertIn("id=" + config["udid"], command)
         self.assertIn(str(self.manager.state_dir / "derived_data"), command)
         self.assertIn("USE_PORT=8100", command)
+        self.assertIn("-allowProvisioningDeviceRegistration",command)
 
     def test_actual_worker_completes_failure_without_blocking_caller(self):
         # Unsupported internal action exercises a real worker, private job output,

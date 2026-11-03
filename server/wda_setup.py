@@ -198,7 +198,7 @@ class SetupManager:
             state = props.get("state", item.get("deviceProperties", {}))
             connection = props.get("connection", item.get("connectionProperties", {}))
             software = props.get("software", item.get("deviceProperties", {}))
-            if hardware.get("reality") != "physical" or hardware.get("deviceType") not in {"iPhone", "iPad"}:
+            if hardware.get("reality", "physical") != "physical" or hardware.get("deviceType") not in {"iPhone", "iPad"}:
                 continue
             version = software.get("osVersionNumber", "unknown")
             if isinstance(version, dict):
@@ -595,7 +595,7 @@ class SetupManager:
     def _build_command(self, config, action):
         return ["xcodebuild", "-project", str(Path(config["source_dir"]) / "WebDriverAgent.xcodeproj"),
                 "-scheme", "WebDriverAgentRunner", "-configuration", "Debug", "-destination", "id=" + config["udid"],
-                "-derivedDataPath", str(self.state_dir / "derived_data"), "-allowProvisioningUpdates",
+                "-derivedDataPath", str(self.state_dir / "derived_data"), "-allowProvisioningUpdates", "-allowProvisioningDeviceRegistration",
                 "DEVELOPMENT_TEAM=" + config["team_id"], "CODE_SIGN_STYLE=Automatic", "CODE_SIGN_IDENTITY=Apple Development",
                 "PRODUCT_BUNDLE_IDENTIFIER=" + config["bundle_id"], "USE_PORT=" + str(config["device_port"]), "USE_IP=127.0.0.1", action]
 
