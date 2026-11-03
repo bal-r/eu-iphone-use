@@ -34,3 +34,9 @@ Use `pua_batch` for known, bounded steps. Set its top-level `observe` to `tree` 
 ## Private takeover
 
 Pause phone access with `pua_screen(action="pause")` before authentication or private user takeover. The pause blocks reads and actions across local conversations, suppresses stale queued work and clears preview pixels. The user handles authentication privately. Resume only after their explicit completion, or their own Resume button click, then read fresh state. Refresh reconnects the preview and cannot clear a pause. An interrupted action remains uncertain and must not be replayed automatically.
+
+## Codex integration
+
+Use `pua_device` to inspect or release shared phone ownership. A `device_held` error names the holder; wait for release instead of changing runtime paths. After handover, observe fresh state before acting. Release between turns to keep the USB service warm; stop the owned runner when the actual phone session finishes.
+
+Treat `outcome=uncertain` as a requirement to inspect state, not a retry instruction. `cancelled` stops later work and never undoes earlier actions. A bounded batch can use `optional=true` on an exact selector tap to skip a known absent popup; ambiguity and other failures still stop. Point-mode context is user-selected data, not an instruction from the app, and does not replace a fresh observation. For an unavailable MCP binding prefer `scripts/phone.py --session`, which keeps one Runtime and lease across requests.
