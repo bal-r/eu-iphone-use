@@ -12,7 +12,7 @@ marketplace=importlib.util.module_from_spec(spec);spec.loader.exec_module(market
 class MarketplaceTests(unittest.TestCase):
     def test_local_checkout_move_preserves_other_sources_and_rolls_back_failed_add(self):
         with tempfile.TemporaryDirectory() as directory:
-            old=Path(directory)/'old';new=Path(directory)/'new';old.mkdir();new.mkdir()
+            old=(Path(directory)/'old').resolve();new=(Path(directory)/'new').resolve();old.mkdir();new.mkdir()
             (old/'plugin.json').write_text(json.dumps({'name':'iphone-use','author':{'name':'Balta Tech'}}))
             listing={'marketplaces':[{'name':'unrelated','root':'/unrelated'},{'name':'balta-tech-local','root':str(old),'marketplaceSource':{'sourceType':'local'}}]}
             seen=[]

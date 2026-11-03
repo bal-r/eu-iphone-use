@@ -1,6 +1,6 @@
 {
   "name": "iphone-use",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Private iPhone automation over USB, with no product telemetry and locally restricted device services.",
   "author": {
     "name": "Balta Tech"

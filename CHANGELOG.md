@@ -1,5 +1,12 @@
 # Changes
 
+## 0.6.1 — acceptance fixes
+
+- Preserve actionable setup errors in typed results and report completed batch effects correctly.
+- Serialise lease initialisation across preview/tool threads and reject stale owner metadata after crashes.
+- Keep rejected proxy requests closed and preserve marketplace rollback across canonical macOS paths.
+
+
 ## 0.6.0 — Codex integration
 
 - Stable version-aware MCP registration, concise initial instructions and visible server version.

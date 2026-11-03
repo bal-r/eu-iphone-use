@@ -1,6 +1,26 @@
 # Validation status
 
-This document records the original Balta Tech 0.4.0 acceptance evidence and the separate 0.5.0 usability candidate checks. It is updated when validation completes. Physical-device testing is a distinct acceptance step and must not be inferred from unit tests or an unsigned build.
+This document separates automated candidate checks from physical-device evidence. Build and fixture success do not establish real-phone acceptance.
+
+## 0.6.1 integration candidate — 3 November 2026
+
+This candidate includes the five independent usability branches, selected upstream adaptations and the Codex integration work described in [USABILITY.md](USABILITY.md).
+
+| Check | Result |
+| --- | --- |
+| Complete Python regression suite | 514 passed |
+| Authenticated proxy/transport fixtures | 6 passed |
+| Widget DOM and interaction tests | 65 passed |
+| UI typecheck and production bundle | Passed |
+| Plugin manifests, tool-schema budgets and package validation | Passed |
+
+Coverage includes queued cancellation, cancellation between batch steps, uncertainty during a write, progress without app content, ownership contention and crash/idle release, concurrent lease initialisation, optional absent selectors, Point selection without touch input, and typed setup/batch results.
+
+Before upgrading the installed plugin, the existing 0.4.0 runner completed a fresh Calculator baseline: `12 × 34 = 408`, using seven key taps and a final tree observation. Server metrics reported 5.2074 seconds and 23 HTTP requests. This is a baseline, not evidence of a candidate speedup.
+
+The 0.6.0 upgrade then stopped the owned runner and attempted to start the existing signed build. XCTest failed with “Timed out while enabling automation mode.” The new private failure diagnostics preserved the cause without broader host log capture. Phone observation was paused for the user's private unlock/automation handoff. Candidate Calculator, sustained preview, rotation and takeover acceptance remain pending. Native Codex panel rendering and reviewed Stop/Interrupt hooks also remain unverified; automated widget tests do not establish host support.
+
+No device identifier, signing identity, local capability token, diagnostic bundle or phone image is included in this repository. Dependency and phone-runner versions are unchanged.
 
 ## 0.5.0 usability candidate — 3 November 2026
 

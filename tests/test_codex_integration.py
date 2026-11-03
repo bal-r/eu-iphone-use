@@ -26,6 +26,14 @@ class IntegrationTests(unittest.TestCase):
         self.runtime.client=self.client;self.runtime.phone=PhoneController(self.client,self.tmp.name)
         self.runtime.phone.screen=self.runtime.screen
 
+    def test_concurrent_preview_and_tool_share_one_lease_instance(self):
+        from concurrent.futures import ThreadPoolExecutor
+        (Path(self.tmp.name)/'config.json').write_text(json.dumps({'udid':'fixture-device-1234'}))
+        with patch.dict(os.environ,{'IPHONE_USE_LEASE_ROOT':str(Path(self.tmp.name)/'leases')}):
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                instances=list(pool.map(lambda _:self.runtime.current_lease(),range(16)))
+        self.assertEqual(len({id(instance) for instance in instances}),1)
+
     def test_first_512_characters_cover_efficient_and_private_control(self):
         for text in ('setup(status)','batch','Pause','Never replay','device(release)'):
             self.assertIn(text,INSTRUCTIONS[:512])
@@ -81,6 +89,13 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(data['outcome'],'completed');self.assertTrue(data['ok'])
         uncertain=json.loads(result_content({'error':{'code':'action_uncertain','uncertain':True}})['content'][0]['text'])
         self.assertEqual(uncertain['outcome'],'uncertain')
+
+    def test_string_setup_errors_keep_their_actionable_message(self):
+        data=json.loads(result_content({'ok':False,'error':'Selected device is unavailable','next_steps':['Connect the selected device']})['content'][0]['text'])
+        self.assertEqual(data['outcome'],'failed')
+        self.assertIn('Selected device',data['error']['message'])
+        completed=json.loads(result_content({'complete':True,'results':[{'action_executed':True}]})['content'][0]['text'])
+        self.assertEqual(completed['action_state'],'completed')
 
     def test_target_selection_reads_fresh_state_and_sends_no_touch(self):
         result=self.runtime.call('pua_screen_action',{'action':'select','x':100,'y':220,'width':390,'height':844})

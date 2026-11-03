@@ -39,3 +39,14 @@ The upstream base remains 0.3.16; this release selectively adapts contributions 
 - Adapted startup failure evidence from PR [#26](https://github.com/zhongerxin/iPhone-use/pull/26). Unlike that proposal, broader host log capture is opt-in in this fork; private failure reports remain local.
 
 Original and contributing authors retain their MIT attribution. The phone runner revision and loopback patch are unchanged. See [USABILITY.md](USABILITY.md) for branch boundaries, integration and physical acceptance work.
+
+## Balta Tech 0.6.1 Codex integration candidate
+
+- Added a stable, version-aware compatibility launcher and optional plugin-native registration.
+- Shortened initial MCP instructions; added cancellation, content-free progress, typed results and bounded optional selector taps.
+- Added private per-device ownership with idle/crash release and optional reviewed Stop/Interrupt hooks. This is an independent implementation of the coordination need discussed in upstream PR #52.
+- Added Point mode to share a user-selected target through MCP Apps context without sending a phone gesture.
+- Preserved older-host image content and added persistent guarded CLI sessions.
+- Fixed local marketplace moves, setup-error normalisation and concurrent lease initialisation during acceptance review.
+
+These changes do not introduce telemetry, a cloud relay, a new phone runner, automatic authentication bypass, or broader host logging. Local ownership metadata is described in [PRIVACY.md](PRIVACY.md). Actual checks and remaining physical/host limitations are recorded in [TESTING.md](TESTING.md).

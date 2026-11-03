@@ -56,7 +56,7 @@ const tools: Record<ToolName, HTMLButtonElement> = {
   screenshot: document.getElementById('tool-screenshot') as HTMLButtonElement,
 };
 const app = new App(
-  { name: 'iPhone Use Screen', version: '0.6.0' },
+  { name: 'iPhone Use Screen', version: '0.6.1' },
   { availableDisplayModes: ['fullscreen'] },
   { autoResize: false },
 );

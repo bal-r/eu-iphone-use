@@ -18,7 +18,7 @@ export function createProxy({token, connect}) {
     response.setHeader('X-Balta-Tech-Proxy', '0.4');
     const provided = Buffer.from(request.headers.authorization ?? '');
     if (request.headers.origin !== undefined || provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
-      response.writeHead(403, {'Content-Type': 'text/plain', 'Connection': 'keep-alive'});
+      response.writeHead(403, {'Content-Type': 'text/plain', 'Connection': 'close'});
       response.end('Local authorization required.'); request.resume(); return;
     }
     if (!['GET', 'POST', 'DELETE'].includes(request.method) || !request.url.startsWith('/') || request.url.startsWith('//')) {

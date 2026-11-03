@@ -30,8 +30,8 @@ import wda_image
 from local_auth import connection_token
 
 PUAError=WDAError
-VERSION="0.6.0"
-SCREEN_URI="ui://iphone-use/phone-0.6.0.html"
+VERSION="0.6.1"
+SCREEN_URI="ui://iphone-use/phone-0.6.1.html"
 # Codex scopes reuse to the host, chat, server and UI resource. A stable result
 # ID keeps repeated READY/open/pause/resume calls in that chat on one panel,
 # including after the MCP process reconnects; no device identifiers are needed.
@@ -306,7 +306,7 @@ class Runtime:
         self._context_epoch=None
         self.control=OperationControl()
         self.access.control=self.control
-        self.lease=None;self._lease_key=None
+        self.lease=None;self._lease_key=None;self._lease_lock=threading.RLock()
         self.phone.settle_seconds=setting("WDA_SETTLE_SECONDS",SETTLE_SECONDS,0,2)
         self.phone.call_budget=setting("WDA_CALL_BUDGET_SECONDS",CALL_BUDGET,5,240)
         self.phone.typing_frequency=int(setting("WDA_TYPING_FREQUENCY",TYPING_FREQUENCY,5,120))
@@ -323,12 +323,13 @@ class Runtime:
         self.control.check();self.access.check()
 
     def current_lease(self):
-        key=device_key(self.state_dir)
-        if key!=self._lease_key:
-            if self.lease:self.lease.close()
-            self.lease=DeviceLease(key) if key else None
-            self._lease_key=key
-        return self.lease
+        with self._lease_lock:
+            key=device_key(self.state_dir)
+            if key!=self._lease_key:
+                if self.lease:self.lease.close()
+                self.lease=DeviceLease(key) if key else None
+                self._lease_key=key
+            return self.lease
 
     def call(self,name,args,received_epoch=None):
         self.access.local.token=None
@@ -753,10 +754,15 @@ def result_content(data,structured=False):
     """
     data=dict(data)
     error=data.get("error") or {}
+    if not isinstance(error,dict):
+        error={"code":"operation_failed","message":str(error)}
+        data["error"]=error
     code=error.get("code",data.get("stop_reason"))
     uncertain=error.get("uncertain") is True
     outcome=("uncertain" if uncertain else "cancelled" if code=="cancelled" else "blocked" if code in ("access_paused","phone_locked","device_held","fresh_observation_required") else "failed" if error or data.get("ok") is False else "incomplete" if data.get("complete") is False or data.get("ready") is False else "skipped" if data.get("skipped") else "completed")
-    data.update(outcome=outcome,ok=outcome in ("completed","skipped"),action_state="uncertain" if uncertain else "not_sent" if data.get("action_executed",error.get("action_executed")) is False else "completed" if data.get("action_executed") is True else "not_applicable")
+    executed=data.get("action_executed",error.get("action_executed"))
+    if executed is None and any(isinstance(item,dict) and item.get("action_executed") is True for item in data.get("results",[])):executed=True
+    data.update(outcome=outcome,ok=outcome in ("completed","skipped"),action_state="uncertain" if uncertain else "not_sent" if executed is False else "completed" if executed is True else "not_applicable")
     content=[{"type":"text","text":json.dumps(data,ensure_ascii=False,allow_nan=False,separators=(",",":"))}]
     image=data.get("image") or data.get("observation",{}).get("image")
     if not image and isinstance(data.get("error"),dict):image=data["error"].get("observation",{}).get("image")

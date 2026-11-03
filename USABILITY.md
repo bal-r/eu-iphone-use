@@ -1,6 +1,6 @@
-# Usability work — 0.5.0 candidate
+# Usability work — integration candidate
 
-All changes are developed in an isolated checkout. The installed 0.4.0 plugin and the original checkout are unchanged. `feat/usability-integration` combines the work; it is a testing candidate and is not merged to main.
+All changes are developed in an isolated checkout; the original checkout is unchanged. `feat/usability-integration` combines the first usability work. `feat/codex-integration` adds the Codex improvements and acceptance fixes as version 0.6.1. The local plugin is being upgraded for controlled acceptance; these branches have not yet merged to main.
 
 ## Independent first five branches
 
@@ -23,7 +23,7 @@ These five branches independently start at main commit `1b2fa1e`. Later usabilit
 | `fix/preview-device-identity` | #53 | Retry metadata discovery, reject old lookup generations and clear another phone's retained pixels. |
 | `feat/startup-diagnostics` | #26 | Preserve early runner evidence and distinguish exit codes; broader host logs are opt-in. |
 
-PR #44's loopback boundary was already implemented by this fork. PR #41's geometry idea is covered by the cache; its async gesture routes no longer match its runner dependency. Photo import (#32), device leases (#52), automatic authentication recovery (#46), wireless transports, Android and Windows remain separate future milestones. They expand runtime/permission/platform behaviour beyond this first usability candidate.
+PR #44's loopback boundary was already implemented by this fork. PR #41's geometry idea is covered by the cache; its async gesture routes no longer match its runner dependency. The later Codex integration independently implements per-device ownership, addressing the need discussed in #52. Photo import (#32), automatic authentication recovery (#46), wireless transports, Android and Windows remain separate future milestones.
 
 ## Use the batch improvement
 
@@ -45,9 +45,9 @@ Use a dedicated test session after switching to this candidate. Verify Calculato
 
 No physical speedup or measured delivered frame rate is claimed by these code changes. Regression results are recorded in TESTING.md.
 
-# Codex integration — 0.6.0
+# Codex integration — 0.6.1
 
-The 0.6.0 candidate builds on all 0.5.0 branches. The first 512 instruction characters cover normal control, batching, private takeover and lease release.
+The 0.6.1 candidate builds on all 0.5.0 branches. The first 512 instruction characters cover normal control, batching, private takeover and lease release. Acceptance fixes preserve actionable setup errors, report batch effects, serialise lease initialisation, and keep rejected proxy connections closed.
 
 - The compatibility registration uses a private stable launcher and an atomically updated, hash-verified install marker. `pua_setup(action="status")` reports connected and installed versions and whether restart is needed. `install.sh --native` uses the plugin-bundled MCP on a verified host and removes only a recognised legacy Balta registration. Normal installation retains compatibility with older CLI builds.
 - MCP cancellation notifications stop queued work and later batch steps. A write already in flight remains uncertain; no action is replayed or undone. Progress notifications and the preview show counts, without field values or app content. Cancel does not kill the phone runner or a separately started setup job.
