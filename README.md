@@ -87,3 +87,7 @@ See [TESTING.md](TESTING.md) for validation evidence and the remaining physical-
 ## Preview quality
 
 The preview's Auto / Eco / Fast button controls both viewer pacing and the phone's JPEG capture rate. Auto uses 2 FPS while idle and requests 8 FPS around activity; Eco stays at 2 FPS and Fast requests 8 FPS. These are requested limits, not guaranteed delivered frame rates. Changes wait until the phone command channel is available and do not replay gestures. Frame age is shown beside the connection state. Hidden panels stop renewing capture as before.
+
+## Startup diagnostics
+
+Failed runner starts now retain a private XCTest result bundle and a bounded, redacted failure report under the runtime's `diagnostics/` directory. Status distinguishes the runner's exit code from xcodebuild's and preserves early failure evidence. No report is uploaded. Optional broader Mac log capture is off by default; enable it deliberately with `IPHONE_USE_XCTEST_HOST_LOG=1`. Diagnostic files remain locally until removed.
