@@ -276,6 +276,14 @@ class ScreenHub:
                     self._thread.start()
         return self._wire(state, after_seq, last_event_id)
 
+    def fresh_geometry(self,max_age=2):
+        """Latest stream geometry only; never starts capture or renews its lease."""
+        if self._paused():return None
+        with self._lock:
+            if self._frame is None or self._received_at is None or time.monotonic()-self._received_at>max_age:
+                return None
+            return {"width":self._frame["width"],"height":self._frame["height"]}
+
     def close(self):
         with self._lock:
             self._lease_until = 0
