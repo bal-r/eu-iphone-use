@@ -69,8 +69,10 @@ class PackagingTests(unittest.TestCase):
             if source.is_file() and 'node_modules' not in rel.parts:
                 self.assertEqual((self.stage / rel).read_bytes(), source.read_bytes(), str(rel))
         for name in ('assets/phone-screen.html', 'tooling/screen-stream.mjs', 'tooling/forward.mjs',
-                     'tooling/package-lock.json', 'scripts/phone.py', 'scripts/check_screen_ui.py'):
+                     'tooling/package-lock.json', 'scripts/phone.py', 'scripts/check_screen_ui.py', '.codex-plugin/hooks.json'):
             self.assertEqual((self.stage / name).read_bytes(), (ROOT / name).read_bytes(), name)
+        overlay = json.loads((self.stage / '.codex-plugin/plugin.json').read_text())
+        self.assertTrue((self.stage / overlay['hooks']).is_file())
         for document in list((self.stage / 'skills').rglob('*.md')) + list((self.stage / 'docs').rglob('*.md')) + [self.stage / 'README.md', self.stage / '.github/SECURITY.md']:
             for target in re.findall(r'\]\(([^)]+)\)', document.read_text()):
                 if '://' in target or target.startswith('#'):

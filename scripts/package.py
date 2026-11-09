@@ -9,8 +9,8 @@ import sys
 import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
-FILES=('plugin.json','mcp.json','.mcp.json','.codex-plugin/plugin.json','.agents/plugins/marketplace.json','README.md','docs/setup.md','docs/requirements.md','docs/development.md','docs/performance.md','docs/privacy.md','.github/SECURITY.md','docs/upstream.md','docs/testing.md','docs/usage.md','docs/changelog.md','LICENSE','docs/third-party-notices.md','ui/package.json','ui/package-lock.json','ui/build.mjs','ui/src/app.ts','ui/index.html','ui/style.css','ui/tsconfig.json','ui/tests/widget.test.mjs')
-DIRS=('assets','server','skills','docs/licenses','hooks')
+FILES=('plugin.json','mcp.json','.mcp.json','.codex-plugin/plugin.json','.codex-plugin/hooks.json','.agents/plugins/marketplace.json','README.md','docs/setup.md','docs/requirements.md','docs/development.md','docs/performance.md','docs/privacy.md','.github/SECURITY.md','docs/upstream.md','docs/testing.md','docs/usage.md','docs/changelog.md','LICENSE','docs/third-party-notices.md','ui/package.json','ui/package-lock.json','ui/build.mjs','ui/src/app.ts','ui/index.html','ui/style.css','ui/tsconfig.json','ui/tests/widget.test.mjs')
+DIRS=('assets','server','skills','docs/licenses')
 INSTALL_SCRIPTS=('phone.py','wda.sh','check_screen_ui.py','package.py','install.sh','register_mcp.py','marketplace.py')
 SOURCE_DIRS=('scripts','tests','.github')
 TOOLING_FILES=('package.json','package-lock.json','forward.mjs','proxy.mjs','screen-stream.mjs','tests/proxy.test.mjs','patches/wda-loopback.patch')
@@ -43,6 +43,7 @@ def validate():
     assert ui==overlay['interface']
     assert all(manifest[k]==overlay[k] for k in ('name','version','description'))
     assert overlay['mcpServers']=='./.mcp.json' and overlay['skills']=='./skills/'
+    assert (ROOT/overlay['hooks']).is_file()
     portable=json.loads((ROOT/'mcp.json').read_text());legacy=json.loads((ROOT/'.mcp.json').read_text())
     assert portable['mcpServers']==legacy['mcpServers']
     assert list(portable['mcpServers'])==['balta_iphone_use']
