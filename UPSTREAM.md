@@ -2,7 +2,7 @@
 
 Upstream: [zhongerxin/iPhone-use](https://github.com/zhongerxin/iPhone-use), version 0.3.16, commit `3ce9c080534e89fab91a237bf1c53a4a7e9d80a7`.
 
-This independent private repository starts from that source snapshot. It is not part of GitHub's public fork network. Original copyright and the MIT licence are preserved in [LICENSE](LICENSE); dependencies retain their respective licences.
+This independent MIT-licensed derivative starts from that source snapshot and is maintained at [bal-r/eu-iphone-use](https://github.com/bal-r/eu-iphone-use). Original copyright and the MIT licence are preserved in [LICENSE](LICENSE); dependencies retain their respective licences.
 
 The upstream telemetry was documented. Its presence is not evidence that its author inserted malware. This derivative makes different product and privacy decisions and describes only the behaviour it can substantiate.
 

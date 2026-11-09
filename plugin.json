@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "iphone-use",
   "version": "0.6.1",
-  "description": "Private iPhone automation over USB, with no product telemetry and locally restricted device services.",
+  "description": "iPhone automation over USB with no product tracking, authenticated local control, and batched workflows.",
   "author": {
     "name": "Balta Tech"
   },
@@ -11,8 +11,8 @@
     "com.openai": {
       "interface": {
         "displayName": "Balta Tech iPhone Use",
-        "shortDescription": "Private iPhone control",
-        "longDescription": "Control your own iPhone over USB. No usage tracking, no online app lookup, and no developer remote relay. Phone screens you share are processed by your chosen AI provider.",
+        "shortDescription": "No-tracking iPhone control",
+        "longDescription": "Control your iPhone over USB with no product tracking, authenticated local access, and faster known-step batches. Built for European privacy requirements. Screens and text shared with the assistant are processed by your chosen AI provider.",
         "developerName": "Balta Tech",
         "category": "Productivity",
         "logo": "./assets/icon.svg",

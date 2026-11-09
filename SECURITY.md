@@ -21,4 +21,4 @@ Before using sensitive apps, complete the physical-device acceptance checks and 
 
 ## Reporting
 
-Report suspected issues privately to the Balta Tech repository administrators using the private repository's security reporting channel when available. If no reporting channel is configured, contact a known administrator directly; do not post credentials, screenshots, device identifiers, or exploit details in a public issue.
+Report suspected issues privately to the Balta Tech repository administrators using the repository's security reporting channel when available. If no reporting channel is configured, contact a known administrator directly; do not post credentials, screenshots, device identifiers, or exploit details in a public issue.

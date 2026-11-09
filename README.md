@@ -1,76 +1,112 @@
-# Balta Tech iPhone Use
+# EU iPhone Use by Balta Tech
 
-Control your own iPhone from Codex over USB, with a live preview and explicit setup through Xcode.
+**Control your iPhone from Codex over USB. No product tracking. Authenticated local control. Faster workflows with batching and connection reuse.**
 
-This is Balta Tech's private derivative of [zhongerxin/iPhone-use](https://github.com/zhongerxin/iPhone-use). It removes the upstream product telemetry and online app lookup, restricts both phone services to loopback, and authenticates the Mac's USB proxy. The original authors and MIT licence are retained. [See every material change](UPSTREAM.md).
+EU iPhone Use connects an AI assistant to your real iPhone through a local MCP server. Open apps, read screens, tap controls, enter text, and verify results while watching a live preview on your Mac. It uses Apple's developer testing tools, your own signing identity, and a USB cable. No jailbreak, iPhone Mirroring, or separately running Appium server is required.
 
-## Privacy by design
+Built by [Balta Tech](https://balta-tech.com/en/) for European privacy requirements, this MIT-licensed derivative of [zhongerxin/iPhone-use](https://github.com/zhongerxin/iPhone-use) removes product telemetry and adds authenticated USB control, private authentication handoff, and performance improvements. Original copyright and licence notices are preserved. [Changes and attribution](UPSTREAM.md).
 
-The defaults favour data minimisation, user control, and clear processing boundaries for European privacy expectations. They do not imply EU-only AI hosting or legal certification.
+## No tracking and controlled access
 
-- **No product analytics, usage tracking, installation tracking identifier, advertising SDK, or crash-report upload.** The telemetry implementation and its configuration have been removed, rather than disabled by an environment setting.
-- **No developer-operated remote relay or remote administration service.** Device commands travel through your Mac and the USB connection. The phone's HTTP control and video ports bind to `127.0.0.1`.
-- **A private local capability.** The Mac proxy also binds to `127.0.0.1`, requires a randomly generated token, rejects browser Origin headers, and does not expose permissive CORS.
-- **Local app discovery.** App names are resolved using the connected phone and a small bundled reference. There is no App Store search request.
-- **Less retained data.** Preview video stays in memory. Observation images use private files and are deleted on orderly session shutdown. An interrupted process can leave files that need local cleanup.
+- **Zero product telemetry.** No usage analytics, installation tracking ID, advertising SDK, or automatic crash-report upload. The collection code and configuration are removed.
+- **USB device control.** The phone's command and preview services bind to `127.0.0.1`. No Balta Tech cloud relay or remote administration service is involved.
+- **Authenticated local proxy.** The Mac listener binds to loopback, requires a private random token, and rejects browser Origin headers.
+- **Local app discovery.** Installed apps and a bundled offline reference resolve app names without online App Store searches.
+- **Private handoff.** Pause observation for passwords, Apple sign-in, verification codes, Face ID, and Touch ID. Handle authentication directly on your device.
+- **Private local state.** Preview frames stay in memory. Temporary observation images use private files and are removed on orderly session shutdown; interrupted sessions can leave local files for cleanup.
 
-Your AI provider still processes the screen images and text you ask it to inspect. USB transport does not imply EU-only AI processing or an entirely offline assistant. GitHub, npm, and Apple are contacted during source download, dependency installation, and signing. Read [PRIVACY.md](PRIVACY.md) for the complete data flow.
+These defaults support GDPR data minimisation and data protection by design. Screens and text shared with the assistant are processed by your chosen AI provider under your account's terms and settings. Business deployments must choose suitable provider, access, retention, and data-residency arrangements. [Full data flow](PRIVACY.md) · [Security boundaries](SECURITY.md).
 
-This is powerful device automation. It can interact with apps beyond the task you named; it is not an iOS app-permission sandbox. We do not claim that software is free of all vulnerabilities or that a source review proves the absence of every possible backdoor. Our specific, testable promise is that this fork contains no product telemetry or developer remote-access mechanism. [Security scope](SECURITY.md).
+## Faster everyday workflows
+
+Version 0.6.1 reduces repeated work across the model, MCP server, and phone:
+
+| Improvement | What changes |
+| --- | --- |
+| Known-step batches | Send up to 20 known operations in one tool call and request one final observation. Seven taps plus a final read can use one call instead of eight. |
+| Persistent USB connection | Reuse one serial authenticated HTTP connection instead of reopening the USB connection for each request. |
+| Preview geometry cache | Reuse geometry for up to 10 seconds while fresh frame dimensions agree; refresh after rotation or stale metadata. |
+| Adaptive preview | Auto requests 2 FPS at idle and 8 FPS around activity. Eco stays at 2 FPS; Fast requests 8 FPS. |
+| Compact results | Return the useful outcome and final screen without repeating intermediate target details. |
+| Warm runner and ownership | Release phone control between turns while keeping the runner available. Idle ownership expires after 60 seconds. |
+
+**Planning estimate: save 21 seconds of orchestration waiting on a known seven-tap workflow**, assuming three seconds per model/tool handoff and seven handoffs avoided. This is a calculated workflow estimate, separate from phone execution time. The recorded physical Calculator baseline is **5.2 seconds for seven taps and a final tree read** on version 0.4.0. [Performance details and assumptions](PERFORMANCE.md).
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[Codex on your Mac] -->|Local stdio MCP| B[Python tools]
+    B -->|Private token| C[Mac loopback proxy]
+    C -->|USB| D[Signed WebDriverAgent on iPhone]
+    D --> E[iOS apps]
+    D -->|USB preview| A
+```
+
+The assistant reads accessibility text or a screenshot, chooses an action, and checks the resulting screen. Known sequences can run as a batch. Unfamiliar screens require a fresh observation. Failed writes are never automatically replayed.
 
 ## Requirements
 
-- A Mac with full Xcode, initial components installed, and support for your phone's iOS version.
+- A Mac with full Xcode, its initial components, and support for your iPhone's iOS version.
 - Codex desktop and Codex CLI with local plugin/MCP support.
-- Python 3.9 or later; supported Node.js 20.19+, 22.12+, or 24+; npm 10+.
+- Python 3.9+; Node.js 20.19+, 22.12+, or 24+; npm 10+.
 - Your own iPhone, a USB data cable, and your own Apple account for signing.
-
-No jailbreak or separately running Appium server is needed. This uses Apple's developer testing tools rather than Apple's iPhone Mirroring feature. Availability of iPhone Mirroring is therefore not a prerequisite.
 
 ## Install
 
-1. Clone this private repository using your authorised GitHub account:
+Clone the repository and register the plugin. While the repository is private, your GitHub account needs access.
 
-   ```sh
-   gh repo clone Balta-Tech/iphone-use
-   cd iphone-use
-   ```
+```sh
+mkdir -p ~/dev/projects
+cd ~/dev/projects
+git clone https://github.com/bal-r/eu-iphone-use.git
+cd eu-iphone-use
+sh scripts/install.sh
+```
 
-2. Read [UPSTREAM.md](UPSTREAM.md), [PRIVACY.md](PRIVACY.md), and [SECURITY.md](SECURITY.md). The installation script stages the plugin and registers the local MCP server; it does not require your Apple password.
+The installer stages the plugin and registers the `balta_iphone_use` local MCP server through a stable launcher. Reconnect Codex or open a new chat, then enable **Balta Tech iPhone Use** if prompted. The installation does not need your Apple password.
 
-3. Register the plugin:
-
-   ```sh
-   sh scripts/install.sh
-   ```
-
-4. Reconnect Codex or open a new chat and enable **Balta Tech iPhone Use** if prompted. New MCP tools may not load into an already running chat.
-
-5. Open Xcode once. In **Xcode → Settings → Accounts**, sign in to your own Apple account. Complete two-factor authentication in Apple's UI. Never paste credentials or verification codes into chat.
-
-6. Connect your iPhone with USB, unlock it, and accept **Trust This Computer** on the phone. In Xcode, open **Window → Devices and Simulators** and wait for preparation to finish.
-
-7. Enable **Settings → Privacy & Security → Developer Mode** on your iPhone when requested. Restart and confirm on the phone. Enable **Settings → Developer → Enable UI Automation** if Xcode or the runner requests it. Trust only your own development identity under **General → VPN & Device Management** if iOS asks.
-
-8. Ask Codex:
+1. Open **Xcode → Settings → Accounts** and sign in to your own Apple account in Apple's UI.
+2. Connect and unlock your iPhone. Accept **Trust This Computer** and let **Xcode → Window → Devices and Simulators** prepare it.
+3. Enable **Settings → Privacy & Security → Developer Mode** on the phone when requested. Complete its restart and confirmation. Enable **Settings → Developer → Enable UI Automation** if requested. Trust only your own development identity if iOS asks.
+4. Ask Codex:
 
    ```text
    Use iphone-use-setup to configure my USB-connected iPhone.
-   Use this Balta Tech checkout and my own Apple team and a unique bundle ID.
-   Fetch the pinned WDA, apply and verify the supplied loopback hardening,
-   then build and start it. Do not reuse an unverified external WDA service.
-   Wait for pua_ready to report ready=true and show the phone preview.
-   Test 12 × 34 = 408 in Calculator, then stop and report the result.
-   I will handle Apple login, trust prompts, device unlock and verification.
+   Use the Balta Tech checkout, my own Apple team, and a unique bundle ID.
+   Fetch the pinned WDA, apply and verify its loopback patch, then build and start it.
+   Wait for pua_ready to return ready=true.
+   Open Calculator and verify 12 × 34 = 408, then report the result.
+   I will handle Apple login, trust prompts, unlock, and authentication directly.
    ```
 
-9. Review the Calculator result before using personal apps. State the target app and task explicitly. For example: “Open Hinge and help edit my own profile. Ask me for missing personal facts and leave any account verification to me.”
+5. Start with a specific task, such as: “Open my app, inspect the settings page, and report what you see.”
+6. Finish with `pua_setup(action="stop")`, close the preview, and disconnect USB. Closing a chat or releasing ownership can leave the USB runner active.
 
-10. When finished, ask Codex to stop its owned WDA job with `pua_setup(action="stop")`, close the preview, and disconnect USB. Closing the chat alone is not the same as stopping the phone runner.
+Apple's free Personal Team supports personal-device testing with seven-day provisioning. Rebuild and reinstall the runner when that provisioning expires. [Apple account guidance](https://developer.apple.com/help/account/basics/about-your-developer-account).
 
-Apple's free Personal Team can support personal-device testing, but provisioning expires after seven days and the runner must then be rebuilt and reinstalled. Apple also limits the number of development apps and devices. [Apple account guidance](https://developer.apple.com/help/account/basics/about-your-developer-account).
+## MCP setup and session controls
 
-## Development and validation
+The recommended installer includes both operating skills and the MCP registration. Check the registration with:
+
+```sh
+codex mcp list
+codex mcp get balta_iphone_use --json
+```
+
+The server uses local **stdio**; no public MCP URL or externally exposed port is needed. For the supported MCP configuration format, see [OpenAI's MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
+
+- `pua_setup(action="status")` reports service state, running version, and installed-version mismatch.
+- `pua_ready(screenshot=false)` checks the connection and returns a fresh observation when ready.
+- `pua_device(action="release")` releases conversation ownership while keeping the USB runner warm.
+- `pua_setup(action="stop")` ends the owned runner job.
+- `scripts/phone.py --session` provides a persistent CLI fallback.
+
+The preview provides Pause/Resume, frame age, Auto/Eco/Fast pacing, and Point mode for sharing a selected target without tapping the phone. Host support for native preview and lifecycle hooks varies. [Controls and result contracts](USABILITY.md).
+
+## Validation and development
+
+Recorded on 3 November 2026 for version 0.6.1: **514 Python tests, 65 widget tests, and 6 proxy/transport tests passed**, together with UI build, package validation, and real stdio startup/catalog/ping checks. The original 0.4.0 physical session verified Calculator, rejection of unauthenticated Mac access, and refusal of Wi-Fi connections to the phone's command and preview ports. Full 0.6.1 physical performance and takeover acceptance remains pending. [Detailed evidence](TESTING.md).
 
 ```sh
 npm ci --prefix ui --ignore-scripts --no-audit --no-fund
@@ -80,24 +116,6 @@ node --test tooling/tests/*.test.mjs
 sh scripts/check.sh
 ```
 
-The UI build is committed as a self-contained HTML resource and must match the source. Runtime USB dependencies use `npm ci --ignore-scripts` and the committed lockfile. Code changes and dependency updates require a new review; do not silently track upstream `main` on a phone installation.
+The phone runner is pinned and its approved loopback patch is verified before managed builds and startup. Runtime dependencies use the committed lockfile and `npm ci --ignore-scripts`. Review dependency and runner changes deliberately.
 
-See [TESTING.md](TESTING.md) for validation evidence and the remaining physical-device checks. Successful unit tests or an unsigned Xcode build do not establish that a particular phone has passed acceptance testing.
-
-## Preview quality
-
-The preview's Auto / Eco / Fast button controls both viewer pacing and the phone's JPEG capture rate. Auto uses 2 FPS while idle and requests 8 FPS around activity; Eco stays at 2 FPS and Fast requests 8 FPS. These are requested limits, not guaranteed delivered frame rates. Changes wait until the phone command channel is available and do not replay gestures. Frame age is shown beside the connection state. Hidden panels stop renewing capture as before.
-
-## Startup diagnostics
-
-Failed runner starts now retain a private XCTest result bundle and a bounded, redacted failure report under the runtime's `diagnostics/` directory. Status distinguishes the runner's exit code from xcodebuild's and preserves early failure evidence. No report is uploaded. Optional broader Mac log capture is off by default; enable it deliberately with `IPHONE_USE_XCTEST_HOST_LOG=1`. Diagnostic files remain locally until removed.
-
-## Usability improvements
-
-Version 0.6.1 combines compact known-step workflows, USB connection reuse, adaptive preview, selected upstream reliability fixes and Codex integration improvements. [USABILITY.md](USABILITY.md) lists the independent branches and APIs. [TESTING.md](TESTING.md) separates passing automated checks from remaining phone acceptance work; no measured physical speedup is claimed yet.
-
-## MCP connection and ownership
-
-The installer registers a stable local launcher, so future plugin updates do not leave the CLI pointing at a removed version cache. Reconnect the MCP after installation. `pua_setup(action="status")` reports the running version and any installed-version mismatch; the preview displays its server version. On a host verified to support plugin-bundled MCP servers, `sh scripts/install.sh --native` uses that mode and removes only a recognised Balta compatibility registration.
-
-Release control with `pua_device(action="release")` between turns. The bundled Stop/Interrupt hooks do this automatically where supported and trusted; they do not stop the USB runner. A lease also expires after 60 idle seconds and is released by process exit. End the actual phone session with `pua_setup(action="stop")`. Use `scripts/phone.py --session` for persistent CLI fallback. See [USABILITY.md](USABILITY.md) for cancellation, Point mode and result contracts.
+If this project helps your work, [star EU iPhone Use on GitHub](https://github.com/bal-r/eu-iphone-use) and share a reproducible use case or issue.
