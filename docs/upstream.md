@@ -24,7 +24,7 @@ The `pua_` tool names remain compatible with existing Codex workflows. The separ
 
 The phone runner derives from [Appium WebDriverAgent](https://github.com/appium/WebDriverAgent), version 16.14.0, commit `d17782422d55ff1e5e0ceb74eb1fd509cc0c35b6`.
 
-The reviewed diff is in [patches/wda-loopback.patch](../patches/wda-loopback.patch). [server/wda_hardening.py](../server/wda_hardening.py) verifies the original and patched file hashes. Unrecognised modifications are rejected rather than reset. No signing identity, personal device identifier, Apple credential, or provisioning profile is included in this repository.
+The reviewed diff is in [patches/wda-loopback.patch](../tooling/patches/wda-loopback.patch). [server/wda_hardening.py](../server/wda_hardening.py) verifies the original and patched file hashes. Unrecognised modifications are rejected rather than reset. No signing identity, personal device identifier, Apple credential, or provisioning profile is included in this repository.
 
 Changes from upstream must be reviewed deliberately. Updating a pinned revision requires updating the approved patch, hashes, dependencies, and validation evidence together.
 

@@ -429,4 +429,4 @@ The complete list of contributors can be found at:
 - https://github.com/garycourt/uri-js/graphs/contributors
 ```
 
-The BSD licence for the WebDriverAgent test fixture is preserved in [licenses/WebDriverAgent-BSD.txt](../licenses/WebDriverAgent-BSD.txt). Package-lock files are authoritative for current package versions.
+The BSD licence for the WebDriverAgent test fixture is preserved in [licenses/WebDriverAgent-BSD.txt](licenses/WebDriverAgent-BSD.txt). Package-lock files are authoritative for current package versions.

@@ -10,10 +10,10 @@ import zipfile
 
 ROOT=Path(__file__).resolve().parents[1]
 FILES=('plugin.json','mcp.json','.mcp.json','.codex-plugin/plugin.json','.agents/plugins/marketplace.json','README.md','docs/setup.md','docs/requirements.md','docs/development.md','docs/performance.md','docs/privacy.md','.github/SECURITY.md','docs/upstream.md','docs/testing.md','docs/usage.md','docs/changelog.md','LICENSE','docs/third-party-notices.md','ui/package.json','ui/package-lock.json','ui/build.mjs','ui/src/app.ts','ui/index.html','ui/style.css','ui/tsconfig.json','ui/tests/widget.test.mjs')
-DIRS=('assets','server','skills','patches','licenses','hooks')
+DIRS=('assets','server','skills','docs/licenses','hooks')
 INSTALL_SCRIPTS=('phone.py','wda.sh','check_screen_ui.py','package.py','install.sh','register_mcp.py','marketplace.py')
 SOURCE_DIRS=('scripts','tests','.github')
-TOOLING_FILES=('package.json','package-lock.json','forward.mjs','proxy.mjs','screen-stream.mjs','tests/proxy.test.mjs')
+TOOLING_FILES=('package.json','package-lock.json','forward.mjs','proxy.mjs','screen-stream.mjs','tests/proxy.test.mjs','patches/wda-loopback.patch')
 
 
 def package_files(source_package=False):
