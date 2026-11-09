@@ -1,6 +1,6 @@
 # Usability and Codex integration — 0.6.1
 
-All changes were developed in an isolated checkout; the original checkout remains unchanged. `feat/usability-integration` combines the first usability work. `feat/codex-integration` adds the Codex improvements and acceptance fixes as version 0.6.1. These changes are integrated into the repository main branch, and the local plugin is installed for controlled acceptance. Physical-phone and native-host limitations remain recorded in TESTING.md.
+All changes were developed in an isolated checkout; the original checkout remains unchanged. `feat/usability-integration` combines the first usability work. `feat/codex-integration` adds the Codex improvements and acceptance fixes as version 0.6.1. These changes are integrated into the repository main branch, and the local plugin is installed for controlled acceptance. Physical-phone and native-host limitations remain recorded in testing.md.
 
 ## Independent first five branches
 
@@ -43,7 +43,7 @@ This is for already known steps. Inspect unfamiliar pages before building a batc
 
 Use a dedicated test session after switching to this candidate. Verify Calculator results, compare whole-task time and tool round-trip counts, try repeated selector/preview taps, rotate the phone, exercise Auto/Eco/Fast, and run a sustained preview/control session. Test pause during a pending read and during an action; private pixels and queued work must not reappear after resume. Verify resume needs fresh state, and stop/restart only the owned job. Test the first-device setup path on an unregistered test device.
 
-No physical speedup or measured delivered frame rate is claimed by these code changes. Regression results are recorded in TESTING.md.
+No physical speedup or measured delivered frame rate is claimed by these code changes. Regression results are recorded in testing.md.
 
 # Codex integration — 0.6.1
 

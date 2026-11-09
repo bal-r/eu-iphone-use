@@ -13,7 +13,7 @@ EU iPhone Use 0.6.1 reduces orchestration calls, repeated USB connection setup, 
 | Preview | Auto requests 2 FPS idle and 8 FPS around activity; Eco 2 FPS; Fast 8 FPS. | `server/iphone_use.py`, `Runtime.screen_gesture`; `ui/src/app.ts` |
 | Tree reads | Exclude expensive visibility/accessibility attributes by default; reuse app and viewport data from the source where available. | `server/wda_controller.py`, `Phone.tree` |
 | App resolution | Installed-device inventory has a five-minute local cache; no online catalog lookup. | `server/wda_apps.py` |
-| Session lifecycle | Release ownership without stopping the runner; 60-second idle lease expiry. | `server/device_lease.py`, `USABILITY.md` |
+| Session lifecycle | Release ownership without stopping the runner; 60-second idle lease expiry. | `server/device_lease.py`, `docs/usage.md` |
 
 Batching preserves errors, uncertainty, input continuation, cancellation, and submission barriers. It is intended for known steps. Removing intermediate model decisions does not remove the need to inspect unfamiliar screens.
 
@@ -21,7 +21,7 @@ Batching preserves errors, uncertainty, input continuation, cancellation, and su
 
 On 3 November 2026, the 0.4.0 runner completed `12 × 34 = 408` in Calculator using seven taps and a final tree observation. The metrics recorded **5.2074 seconds and 23 HTTP requests**. Use **5.2 seconds** in articles. This is tool-layer execution time, excluding model reasoning and host scheduling.
 
-The 0.6.1 integration records 514 passing Python tests, 65 widget tests, 6 authenticated proxy/transport tests, and successful stdio startup/catalog/ping checks. Physical candidate timing remains pending after an XCTest automation-mode startup failure. See [TESTING.md](TESTING.md).
+The 0.6.1 integration records 514 passing Python tests, 65 widget tests, 6 authenticated proxy/transport tests, and successful stdio startup/catalog/ping checks. Physical candidate timing remains pending after an XCTest automation-mode startup failure. See [TESTING.md](testing.md).
 
 ## Absolute workflow estimate
 

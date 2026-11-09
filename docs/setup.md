@@ -69,4 +69,4 @@ On hosts verified to support plugin-bundled MCP servers, `sh scripts/install.sh 
 
 `pua_setup(action="status")` reports the service and running version. Failed starts retain a private XCTest result and redacted diagnostics under the runtime's `diagnostics/` directory. Nothing is uploaded. Optional broader Mac log capture is off by default; `IPHONE_USE_XCTEST_HOST_LOG=1` enables it deliberately.
 
-See [controls](../USABILITY.md), [privacy](../PRIVACY.md), and [security](../SECURITY.md) for details.
+See [controls](usage.md), [privacy](privacy.md), and [security](../.github/SECURITY.md) for details.

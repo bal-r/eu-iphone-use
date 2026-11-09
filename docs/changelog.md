@@ -32,4 +32,4 @@ This candidate is validated with isolated regression fixtures. It has not yet un
 
 Removed upstream product telemetry, tracking configuration, dashboards, online app search, and unused host adapters. Added hash-verified phone loopback hardening, an authenticated browser-resistant Mac USB proxy, separate private runtime state, and observation-image cleanup on orderly shutdown.
 
-Rewrote privacy and setup documentation, translated preview controls, refreshed dependencies, and added focused regression checks. See [UPSTREAM.md](UPSTREAM.md) for provenance and the complete material changes, and [TESTING.md](TESTING.md) for the actual validation state.
+Rewrote privacy and setup documentation, translated preview controls, refreshed dependencies, and added focused regression checks. See [UPSTREAM.md](upstream.md) for provenance and the complete material changes, and [TESTING.md](testing.md) for the actual validation state.

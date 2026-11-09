@@ -49,7 +49,8 @@ class PackagingTests(unittest.TestCase):
             self.assertNotIn('server/analytics.py', contents)
             self.assertNotIn('server/posthog.json', contents)
             self.assertNotIn('server/ga4.json', contents)
-            self.assertIn('PRIVACY.md', contents)
+            self.assertIn('docs/privacy.md', contents)
+            self.assertIn('.github/SECURITY.md', contents)
             self.assertNotIn('docs/private-notes.md', contents)
             for document in ('docs/setup.md', 'docs/requirements.md', 'docs/development.md'):
                 self.assertIn(document, contents)
@@ -58,7 +59,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('scripts/benchmark.py', entries)
         self.assertNotIn('scripts/benchmark.py', installed)
         self.assertNotIn('scripts/smoke_mcp.py', installed)
-        self.assertFalse(any(p.startswith(('tests/', '.github/')) for p in installed))
+        self.assertFalse(any(p.startswith(('tests/', '.github/workflows/')) for p in installed))
         self.assertEqual((self.root / 'docs/private-notes.md').read_text(), 'local-only fixture')
         self.assertTrue((self.root / 'evals/cases.json').is_file())
 
@@ -70,7 +71,7 @@ class PackagingTests(unittest.TestCase):
         for name in ('assets/phone-screen.html', 'tooling/screen-stream.mjs', 'tooling/forward.mjs',
                      'tooling/package-lock.json', 'scripts/phone.py', 'scripts/check_screen_ui.py'):
             self.assertEqual((self.stage / name).read_bytes(), (ROOT / name).read_bytes(), name)
-        for document in list((self.stage / 'skills').rglob('*.md')) + list((self.stage / 'docs').rglob('*.md')) + [self.stage / 'README.md', self.stage / 'PRIVACY.md', self.stage / 'UPSTREAM.md', self.stage / 'CHANGELOG.md']:
+        for document in list((self.stage / 'skills').rglob('*.md')) + list((self.stage / 'docs').rglob('*.md')) + [self.stage / 'README.md', self.stage / '.github/SECURITY.md']:
             for target in re.findall(r'\]\(([^)]+)\)', document.read_text()):
                 if '://' in target or target.startswith('#'):
                     continue

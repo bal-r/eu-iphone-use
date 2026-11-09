@@ -29,6 +29,6 @@ Codex reads the screen and uses the phone's controls through a local MCP connect
 
 ## Documentation
 
-[Controls](USABILITY.md) · [Performance](PERFORMANCE.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Development](docs/development.md)
+[Controls](docs/usage.md) · [Performance](docs/performance.md) · [Privacy](docs/privacy.md) · [Security](.github/SECURITY.md) · [Development](docs/development.md)
 
-Based on [iPhone-use](https://github.com/zhongerxin/iPhone-use). [MIT licence](LICENSE) · [Changes from upstream](UPSTREAM.md).
+Based on [iPhone-use](https://github.com/zhongerxin/iPhone-use). [MIT licence](LICENSE) · [Changes from upstream](docs/upstream.md).

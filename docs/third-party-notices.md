@@ -1,6 +1,6 @@
 # Third-party notices
 
-This derivative is based on zhongerxin/iPhone-use, commit `3ce9c080534e89fab91a237bf1c53a4a7e9d80a7`, under the MIT licence preserved in [LICENSE](LICENSE). Balta Tech's changes are distributed under the same licence. Original authorship is retained; the fork is independently maintained.
+This derivative is based on zhongerxin/iPhone-use, commit `3ce9c080534e89fab91a237bf1c53a4a7e9d80a7`, under the MIT licence preserved in [LICENSE](../LICENSE). Balta Tech's changes are distributed under the same licence. Original authorship is retained; the fork is independently maintained.
 
 The phone runner is Appium WebDriverAgent 16.14.0, commit `d17782422d55ff1e5e0ceb74eb1fd509cc0c35b6`, with the documented local loopback patch. It is downloaded separately and retains its own licence and notices. Its source derives from Facebook WebDriverAgent and Appium contributors.
 
@@ -429,4 +429,4 @@ The complete list of contributors can be found at:
 - https://github.com/garycourt/uri-js/graphs/contributors
 ```
 
-The BSD licence for the WebDriverAgent test fixture is preserved in [licenses/WebDriverAgent-BSD.txt](licenses/WebDriverAgent-BSD.txt). Package-lock files are authoritative for current package versions.
+The BSD licence for the WebDriverAgent test fixture is preserved in [licenses/WebDriverAgent-BSD.txt](../licenses/WebDriverAgent-BSD.txt). Package-lock files are authoritative for current package versions.

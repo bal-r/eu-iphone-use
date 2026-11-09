@@ -4,7 +4,7 @@ This document separates automated candidate checks from physical-device evidence
 
 ## 0.6.1 integration candidate — 3 November 2026
 
-This candidate includes the five independent usability branches, selected upstream adaptations and the Codex integration work described in [USABILITY.md](USABILITY.md).
+This candidate includes the five independent usability branches, selected upstream adaptations and the Codex integration work described in [USABILITY.md](usage.md).
 
 | Check | Result |
 | --- | --- |
@@ -40,7 +40,7 @@ The isolated `feat/usability-integration` checkout passes:
 
 The tests use temporary runtime directories and synthetic phone/Xcode endpoints. No connected iPhone was operated, no installed plugin was replaced, and no service was restarted for this work. The phone runner revision, loopback patch and third-party dependency versions are unchanged.
 
-Physical acceptance of 0.5.0 remains pending: sustained preview/control operation, actual delivered frame rates and end-to-end task latency, rotation, cross-process authentication takeover, stop/reconnect, and first-device signing registration. The 0.4.0 physical results below do not establish these new behaviours. See [USABILITY.md](USABILITY.md).
+Physical acceptance of 0.5.0 remains pending: sustained preview/control operation, actual delivered frame rates and end-to-end task latency, rotation, cross-process authentication takeover, stop/reconnect, and first-device signing registration. The 0.4.0 physical results below do not establish these new behaviours. See [USABILITY.md](usage.md).
 
 ## Original 0.4.0 automated checks
 

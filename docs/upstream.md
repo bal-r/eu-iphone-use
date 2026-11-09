@@ -2,7 +2,7 @@
 
 Upstream: [zhongerxin/iPhone-use](https://github.com/zhongerxin/iPhone-use), version 0.3.16, commit `3ce9c080534e89fab91a237bf1c53a4a7e9d80a7`.
 
-This independent MIT-licensed derivative starts from that source snapshot and is maintained at [bal-r/eu-iphone-use](https://github.com/bal-r/eu-iphone-use). Original copyright and the MIT licence are preserved in [LICENSE](LICENSE); dependencies retain their respective licences.
+This independent MIT-licensed derivative starts from that source snapshot and is maintained at [bal-r/eu-iphone-use](https://github.com/bal-r/eu-iphone-use). Original copyright and the MIT licence are preserved in [LICENSE](../LICENSE); dependencies retain their respective licences.
 
 The upstream telemetry was documented. Its presence is not evidence that its author inserted malware. This derivative makes different product and privacy decisions and describes only the behaviour it can substantiate.
 
@@ -24,7 +24,7 @@ The `pua_` tool names remain compatible with existing Codex workflows. The separ
 
 The phone runner derives from [Appium WebDriverAgent](https://github.com/appium/WebDriverAgent), version 16.14.0, commit `d17782422d55ff1e5e0ceb74eb1fd509cc0c35b6`.
 
-The reviewed diff is in [patches/wda-loopback.patch](patches/wda-loopback.patch). [server/wda_hardening.py](server/wda_hardening.py) verifies the original and patched file hashes. Unrecognised modifications are rejected rather than reset. No signing identity, personal device identifier, Apple credential, or provisioning profile is included in this repository.
+The reviewed diff is in [patches/wda-loopback.patch](../patches/wda-loopback.patch). [server/wda_hardening.py](../server/wda_hardening.py) verifies the original and patched file hashes. Unrecognised modifications are rejected rather than reset. No signing identity, personal device identifier, Apple credential, or provisioning profile is included in this repository.
 
 Changes from upstream must be reviewed deliberately. Updating a pinned revision requires updating the approved patch, hashes, dependencies, and validation evidence together.
 
@@ -38,7 +38,7 @@ The upstream base remains 0.3.16; this release selectively adapts contributions 
 - Adapted model-identity refresh, retry and old-device frame invalidation from PR [#53](https://github.com/zhongerxin/iPhone-use/pull/53). No additional hardware-model claims are introduced.
 - Adapted startup failure evidence from PR [#26](https://github.com/zhongerxin/iPhone-use/pull/26). Unlike that proposal, broader host log capture is opt-in in this fork; private failure reports remain local.
 
-Original and contributing authors retain their MIT attribution. The phone runner revision and loopback patch are unchanged. See [USABILITY.md](USABILITY.md) for branch boundaries, integration and physical acceptance work.
+Original and contributing authors retain their MIT attribution. The phone runner revision and loopback patch are unchanged. See [USABILITY.md](usage.md) for branch boundaries, integration and physical acceptance work.
 
 ## Balta Tech 0.6.1 Codex integration candidate
 
@@ -49,4 +49,4 @@ Original and contributing authors retain their MIT attribution. The phone runner
 - Preserved older-host image content and added persistent guarded CLI sessions.
 - Fixed local marketplace moves, setup-error normalisation and concurrent lease initialisation during acceptance review.
 
-These changes do not introduce telemetry, a cloud relay, a new phone runner, automatic authentication bypass, or broader host logging. Local ownership metadata is described in [PRIVACY.md](PRIVACY.md). Actual checks and remaining physical/host limitations are recorded in [TESTING.md](TESTING.md).
+These changes do not introduce telemetry, a cloud relay, a new phone runner, automatic authentication bypass, or broader host logging. Local ownership metadata is described in [PRIVACY.md](privacy.md). Actual checks and remaining physical/host limitations are recorded in [TESTING.md](testing.md).

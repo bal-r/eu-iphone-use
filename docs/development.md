@@ -16,7 +16,7 @@ The phone runner is pinned. Its approved loopback patch is verified before manag
 
 ## Validation record
 
-See [testing](../TESTING.md) for automated results, physical-device acceptance, and remaining checks. See [performance](../PERFORMANCE.md) for the recorded baseline and benchmark procedure.
+See [testing](testing.md) for automated results, physical-device acceptance, and remaining checks. See [performance](performance.md) for the recorded baseline and benchmark procedure.
 
 ## Packages
 

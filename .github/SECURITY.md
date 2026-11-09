@@ -15,7 +15,7 @@ Mac processes running as your account can read that account's files and may be a
 
 ## Verification
 
-See [TESTING.md](TESTING.md). A dependency advisory match is not proof of exploitability in this application. Conversely, a clean dependency scan or passing test suite is not proof that every backdoor or vulnerability is absent.
+See [TESTING.md](../docs/testing.md). A dependency advisory match is not proof of exploitability in this application. Conversely, a clean dependency scan or passing test suite is not proof that every backdoor or vulnerability is absent.
 
 Before using sensitive apps, complete the physical-device acceptance checks and verify that stopping the owned runner closes its services. Use your own signing identity. Never give an assistant Apple passwords, verification codes, or your device passcode.
 
