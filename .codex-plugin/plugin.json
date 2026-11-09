@@ -1,7 +1,7 @@
 {
   "name": "iphone-use",
   "version": "0.6.1",
-  "description": "iPhone automation over USB with no product tracking, authenticated local control, and batched workflows.",
+  "description": "Let Codex open apps, tap, type, and scroll on your iPhone over USB, with a live preview and no tracking.",
   "author": {
     "name": "Balta Tech"
   },
@@ -9,10 +9,10 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Balta Tech iPhone Use",
-    "shortDescription": "No-tracking iPhone control",
-    "longDescription": "Control your iPhone over USB with no product tracking, authenticated local access, and faster known-step batches. Built for European privacy requirements. Screens and text shared with the assistant are processed by your chosen AI provider.",
-    "developerName": "Balta Tech",
+    "displayName": "EU iPhone Use",
+    "shortDescription": "AI control for your iPhone",
+    "longDescription": "Let Codex use your iPhone. Open apps, tap, type, and scroll over USB. Watch the live preview, run known steps together, and take over whenever you need. No tracking or analytics.",
+    "developerName": "bal-r",
     "category": "Productivity",
     "logo": "./assets/icon.svg",
     "composerIcon": "./assets/icon.svg",

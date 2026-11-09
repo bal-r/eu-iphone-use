@@ -14,7 +14,7 @@ sh scripts/install.sh
 
 A private repository requires access through your GitHub account. If you already have the checkout, run the installer from that directory.
 
-The installer adds the plugin and registers its local MCP server. Reconnect Codex or open a new chat, then enable **Balta Tech iPhone Use** if prompted.
+The installer adds the plugin and registers its local MCP server. Reconnect Codex or open a new chat, then enable **EU iPhone Use** if prompted.
 
 ## Connect your phone
 
