@@ -28,7 +28,7 @@ class PackagingTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(source.read_bytes())
         # Local-only material exists on disk even when it is not Git-tracked.
-        for name in ('docs/private-notes.md', 'evals/cases.json', 'plugins/experiment/private.txt'):
+        for name in ('docs/private-notes.md', 'promo/article-draft.md', 'evals/cases.json', 'plugins/experiment/private.txt'):
             target = cls.root / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text('local-only fixture')
@@ -43,13 +43,16 @@ class PackagingTests(unittest.TestCase):
             entries = {Path(name).relative_to('iphone-use').as_posix() for name in archive.namelist()}
         installed = {p.relative_to(self.stage).as_posix() for p in self.stage.rglob('*') if p.is_file()}
         for contents in (entries, installed):
-            self.assertFalse(any(p.startswith(('docs/', 'evals/', 'plugins/', 'ui/node_modules/')) for p in contents))
+            self.assertFalse(any(p.startswith(('promo/', 'evals/', 'plugins/', 'ui/node_modules/')) for p in contents))
             self.assertNotIn('server/posthog.local.json', contents)
             self.assertNotIn('server/ga4.local.json', contents)
             self.assertNotIn('server/analytics.py', contents)
             self.assertNotIn('server/posthog.json', contents)
             self.assertNotIn('server/ga4.json', contents)
             self.assertIn('PRIVACY.md', contents)
+            self.assertNotIn('docs/private-notes.md', contents)
+            for document in ('docs/setup.md', 'docs/requirements.md', 'docs/development.md'):
+                self.assertIn(document, contents)
         self.assertIn('tests/test_packaging.py', entries)
         self.assertIn('.github/workflows/check.yml', entries)
         self.assertIn('scripts/benchmark.py', entries)
@@ -67,7 +70,7 @@ class PackagingTests(unittest.TestCase):
         for name in ('assets/phone-screen.html', 'tooling/screen-stream.mjs', 'tooling/forward.mjs',
                      'tooling/package-lock.json', 'scripts/phone.py', 'scripts/check_screen_ui.py'):
             self.assertEqual((self.stage / name).read_bytes(), (ROOT / name).read_bytes(), name)
-        for document in list((self.stage / 'skills').rglob('*.md')) + [self.stage / 'README.md', self.stage / 'PRIVACY.md', self.stage / 'UPSTREAM.md', self.stage / 'CHANGELOG.md']:
+        for document in list((self.stage / 'skills').rglob('*.md')) + list((self.stage / 'docs').rglob('*.md')) + [self.stage / 'README.md', self.stage / 'PRIVACY.md', self.stage / 'UPSTREAM.md', self.stage / 'CHANGELOG.md']:
             for target in re.findall(r'\]\(([^)]+)\)', document.read_text()):
                 if '://' in target or target.startswith('#'):
                     continue
