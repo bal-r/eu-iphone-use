@@ -1,4 +1,4 @@
-name: Validate private iPhone control
+name: Validate iPhone Use
 on: [push, pull_request]
 permissions:
   contents: read
