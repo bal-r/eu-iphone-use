@@ -21,4 +21,6 @@ Before using sensitive apps, complete the physical-device acceptance checks and 
 
 ## Reporting
 
-Report suspected issues privately to the Balta Tech repository administrators using the repository's security reporting channel when available. If no reporting channel is configured, contact a known administrator directly; do not post credentials, screenshots, device identifiers, or exploit details in a public issue.
+Use [GitHub private vulnerability reporting](https://github.com/bal-r/eu-iphone-use/security/advisories/new) to contact the maintainer. Include the affected version, the relevant boundary, and a minimal reproduction. Keep credentials, personal screenshots, signing material, and device identifiers out of public issues.
+
+Security fixes target the current main branch. When reporting an older version, include whether you can reproduce the behaviour on the current code.

@@ -1,0 +1,38 @@
+name: Bug report
+description: Report a reproducible problem with setup or phone control.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a security issue, use private vulnerability reporting instead of a public issue.
+        Remove credentials, device identifiers, and personal app content from shared evidence.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "For example: 0.6.1 or a commit SHA"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include the task, starting screen, and actions needed to reach the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Mac, iOS, Xcode, and Codex versions
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant error or evidence
+      description: A short redacted excerpt is enough. Do not include signing files or tokens.
